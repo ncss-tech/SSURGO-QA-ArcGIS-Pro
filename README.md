@@ -1,5 +1,49 @@
 # SSURGO-QA
-Official version of the Quality Assurance tools used to certify SSURGO data 
+Official ArcGIS Pro version of the Quality Assurance tools used to certify SSURGO data  
+
+## Current status of the ArcGIS Pro migration from ArcGIS 10.x
+
+Toolset|Tool|ArcGIS Pro Compatible|
+--------------------------------------------------|-------------------------------------------------------------------|---------------------------|
+Setup|Download SSURGO by Areasymbol||
+Setup|Download SSURGO by Region||
+Setup|Generate Regional Transactional Geodatabase||
+Setup|Import SSURGO Datasets into FGDB by Map||
+Setup|Import SSURGO or STATSGO Datasets into FGDB||
+Setup|Insert NATSYM and MUNAME Value||
+Practice Design - Wascob Design|1. Define Area of Interest (WASCOB)|X|
+Practice Design - Wascob Design|2. Create Stream Network (WASCOB)|X|
+Practice Design - Wascob Design|3. Create Watershed(s) (WASCOB)|X|
+Practice Design - Wascob Design|4. Watershed Attributes|X|
+Practice Design - Wascob Design|5. Calculate Runoff Curve Number|X|
+Practice Design - Wascob Design|6. Wascob Design Worksheet|X|
+Practice Design - Wascob Design|7. Design Height & Intake Location|X|
+Practice Design - Wascob Design|8. Tile Layout and Profile|X|
+Practice Design - Wascob Design|9. Ridge Layout and Profile|X|
+Practice Design - Wascob Design|Export Project Data for GPS|X|
+Practice Design - Wascob Utilities|Add Points to Tile Profile|X|
+Practice Design - Wascob Utilities|Calibrate DEM to Field Survey||
+Terrain Analysis Tools|1. Define Area of Interest (Optional)|X|
+Terrain Analysis Tools|2. Create Stream Network (Optional)|X|
+Terrain Analysis Tools|Compound Topographic Index (CTI)|X|
+Terrain Analysis Tools|Stream Power Index (SPI)|X|
+Terrain Analysis Tools|Topographic Position Index (TPI)|X|
+Watershed Tools - Delineation|1. Define Area of Interest|X|
+Watershed Tools - Delineation|2. Create Stream Network|X|
+Watershed Tools - Delineation|3. Create Watershed|X|
+Watershed Tools - Delineation|4. Update Watershed Attributes|X|
+Watershed Tools - Runoff Curve Number|1. Prepare Soils and Landuse|X|
+Watershed Tools - Runoff Curve Number|2. Calculate Runoff Curve Number|X|
+Watershed Tools - Storage|Calculate Stage Storage|X|
+Watershed Tools - Storage|Create Pool at Desired Elevation|X|
+Watershed Tools - Storage|Estimate Pool from Contours||
+Watershed Tools - Utilities|Calculate Curve Number from NLCD|X|
+Utilities|Clip/Merge Adjacent Datasets||
+Utilities|Clip/Merge Adjacent DEMs||
+Utilities|ElevationWebServiceClipUSERSELECTReprojectModel||
+Utilities|Change Point Coordinates||
+Utilities|Convert DEM Z-Units||
+
 # 1. Setup
 <ul> 
 <li>Download SSURGO by Areasymbol - Use Soil Data Access and Web Soil Survey download page to get SSURGO datasets. User can a wildcard to query the database by Areasymbol or by age. </li>
