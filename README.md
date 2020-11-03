@@ -13,7 +13,7 @@ Setup|Import SSURGO or STATSGO Datasets into FGDB||
 Setup|Insert NATSYM and MUNAME Value||
 Quality Assurance|Check Attributes||
 Quality Assurance|Compare Spatial-NASIS Mapunits||
-Quality Assurance|Find Common Lines||
+Quality Assurance|Find Common Lines|X|
 Quality Assurance|Find Common Points||
 Quality Assurance|Find Edge Matching Errors||
 Quality Assurance|Find Multipart Features||
