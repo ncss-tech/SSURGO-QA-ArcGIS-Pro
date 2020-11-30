@@ -40,6 +40,8 @@
 #   MUKEY field will automatically be added if it doesn't exist.
 # - Added code to set Mapunt Status to 'Correlated' if Update MUKEY values option is turned
 #   on and user did not specify Mapunit Status.
+# - Updated workspace and report folder if input is .shp.  Prior to this, output text files for
+#   shapefile inputs were written to 1 directory above.
 # - Added code exit script if Mapunit Status or Update MUKEY Values options were not selected
 # - All intermediate datasets are written to "in_memory" instead of written to a FGDB and
 #   and later deleted.  This avoids having to check and delete intermediate data during every
@@ -179,7 +181,7 @@ def CompareMusym(dNASIS, musymList, theAreasymbol, dBadSurveys):
 
         for theMUSYM in dNASIS:
             if not theMUSYM in musymList:
-                #AddMsgAndPrint("\tMissing map layer musym: '" + theMUSYM + "'", 0)
+                #AddMsgAndPrint("\tMissing map layer musym: '" + theMUSYM + "'")
                 missingLayer.append(theMUSYM)
 
         musymCnt = len(missingLayer)
@@ -222,7 +224,7 @@ def CompareMusym(dNASIS, musymList, theAreasymbol, dBadSurveys):
                 AddMsgAndPrint("\t" + missingNASIS[0])
 
         else:
-            AddMsgAndPrint(" \n\tAll MUSYM values in spatial layer match the NASIS legend for " + theAreasymbol, 1)
+            AddMsgAndPrint("\n\tAll MUSYM values in spatial layer match the NASIS legend for " + theAreasymbol)
 
         if dbCnt > 0 or musymCnt > 0:
             # Save errors to a dictionary
@@ -343,7 +345,12 @@ if __name__ == '__main__':
         theDataType = desc['dataType'].upper()
         theCatalogPath = desc['catalogPath']
 
-        if theDataType in ('FEATURELAYER','FEATURECLASS'):
+        if theCatalogPath.endswith('.shp') or theDataType == "SHAPEFILE":
+            ws = os.path.dirname(theCatalogPath)
+            rptFolder = ws
+            AddMsgAndPrint("\nFolder for input shapefile: " + ws)
+
+        elif theDataType in ('FEATURELAYER','FEATURECLASS'):
             # input layer is a FEATURELAYER, get featurelayer specific information
             ws = os.path.dirname(theCatalogPath)
             wDesc = arcpy.da.Describe(ws)
@@ -356,11 +363,6 @@ if __name__ == '__main__':
 
             rptFolder = os.path.dirname(ws)
             AddMsgAndPrint("\nWorkspace for input featurelayer: " + ws)
-
-        elif theDataType == "SHAPEFILE":
-            ws = os.path.dirname(theCatalogPath)
-            rptFolder = ws
-            AddMsgAndPrint("\nFolder for input shapefile: " + ws)
 
         # Hardcode NASIS-LIMS Report Webservice for retrieving MUSYM and MUKEY values for a specified AREASYMBOL
         # New NASIS report that allows user to specify any of the MUSTATUS values
@@ -436,8 +438,8 @@ if __name__ == '__main__':
 
         for theAreasymbol in asValues:
             # Process each soil survey identified by Areasymbol
-            AddMsgAndPrint(" \n" + theAreasymbol + ": Comparing spatial layer and NASIS legend for this non-MLRA soil survey...", 0)
-            AddMsgAndPrint("---------------------------------------------------------------------------------------", 0)
+            AddMsgAndPrint(" \n" + theAreasymbol + ": Comparing spatial layer and NASIS legend for this non-MLRA soil survey...")
+            AddMsgAndPrint("---------------------------------------------------------------------------------------")
             iCnt += 1
             arcpy.SetProgressorLabel("Checking survey " + theAreasymbol.upper() + "  (" + Number_Format(iCnt, 0, True) + " of " + Number_Format(len(asList), 0, True) + ")")
 
@@ -499,7 +501,7 @@ if __name__ == '__main__':
         arcpy.SetProgressorLabel("Processing complete for all " + Number_Format(len(asList), 0, True) + " surveys")
 
         if len(badSurveys) > 0:
-            AddMsgAndPrint(" \n---------------------------------------------------------------------------------------", 0)
+            AddMsgAndPrint("\n---------------------------------------------------------------------------------------")
 
             if len(badSurveys) == 1:
                 AddMsgAndPrint("The following survey has problems that must be addressed: " + badSurveys[0], 2)
