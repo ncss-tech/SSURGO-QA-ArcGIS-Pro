@@ -1,39 +1,77 @@
 # QA_CheckAttributes.py
-#
+
+# Author: Steve.Peaslee
+#         GIS Specialist
+#         National Soil Survey Center
+#         USDA - NRCS
+# e-mail: adolfo.diaz@usda.gov
+# phone: 608.662.4422 ext. 216
+
+# Author: Adolfo.Diaz
+#         GIS Specialist
+#         National Soil Survey Center
+#         USDA - NRCS
+# e-mail: adolfo.diaz@usda.gov
+# phone: 608.662.4422 ext. 216
+
 # ArcMap 10.1, arcpy
-#
-# Steve Peaslee, USDA-NRCS National Soil Survey Center
 #
 # Check all spatial AREASYMBOL and other specified attribute values for correct formatting
 # Check all spatial AREASYMBOL values to confirm that they exist in Web Soil Survey
 #
 # Last Modified: 2/8/2017 to Convert the SOAP request to POST-REST request to SDaccess. -- AD
 # Only 1 Post-rest request was needed.  TEST
-#
+
+# ==========================================================================================
 # Upated 4/6/2108 by Adolfo Diaz
 # converted dictionary keys "FORMAT" and "QUERY" to lower case in the JSON request.
 # Also updated the tool to exclude non-SSURGO valid fields using the validation code.
 
-class MyError(Exception):
-    pass
+# ==========================================================================================
+# Updated  12/1/2020 - Adolfo Diaz
+#
+# - Updated and Tested for ArcGIS Pro 2.4.3 and python 3.6
+# - Updated urllib2 to urllib, HTMLParser to html.parser and htmlentitydefs to html.entities
+# - Python3 does not read the html code as a string but as a bytearray, so url read needs to
+#   be converted to string with decode
+# - Added code exit script if Mapunit Status or Update MUKEY Values options were not selected
+# - All intermediate datasets are written to "in_memory" instead of written to a FGDB and
+#   and later deleted.  This avoids having to check and delete intermediate data during every
+#   execution.
+# - All cursors were updated to arcpy.da
+# - Describe functions were updated to describe.da
+# - Updated print_exception function.  Traceback functions slightly changed for Python 3.6.
+# - Added parallel processing factor environment
+# - swithced from sys.exit() to exit()
+# - Updated errorMsg function to handle exit() messages
+# - Every function including main is in a try/except clause
+# - Main code is wrapped in if __name__ == '__main__': even though script will never be
+#   used as independent library.
+# - Normal messages are no longer Warnings unnecessarily.
+# - Removed bValidate - Not sure what the point of this is
+# - Removed bValid - it is populated only once and never checked
+# - Removed ascii encoding of Areasymbol values b/c it was throwing an HTTP error.
+# - Completely rewrote the processLayer function (Now the checkSSURGOAttributesFormat function)
 
-## ===================================================================================
-def PrintMsg(msg, severity=0):
+# ==============================================================================================================================
+def AddMsgAndPrint(msg, severity=0):
+    # prints message to screen if run as a python script
     # Adds tool message to the geoprocessor
     #
     #Split the message on \n first, so that if it's multiple lines, a GPMessage will be added for each line
     try:
-        for string in msg.split('\n'):
+
+        print(msg)
+        #for string in msg.split('\n'):
             #Add a geoprocessing message (in case this is run as a tool)
-            if severity == 0:
-                arcpy.AddMessage(string)
+        if severity == 0:
+            arcpy.AddMessage(msg)
 
-            elif severity == 1:
-                arcpy.AddWarning(string)
+        elif severity == 1:
+            arcpy.AddWarning(msg)
 
-            elif severity == 2:
-                arcpy.AddMessage("    ")
-                arcpy.AddError(string)
+        elif severity == 2:
+            arcpy.AddError("\n" + msg)
 
     except:
         pass
@@ -41,13 +79,18 @@ def PrintMsg(msg, severity=0):
 ## ===================================================================================
 def errorMsg():
     try:
-        tb = sys.exc_info()[2]
-        tbinfo = traceback.format_tb(tb)[0]
-        theMsg = tbinfo + "\n" + str(sys.exc_type)+ ": " + str(sys.exc_value)
-        PrintMsg(theMsg, 2)
+
+        exc_type, exc_value, exc_traceback = sys.exc_info()
+        theMsg = "\t" + traceback.format_exception(exc_type, exc_value, exc_traceback)[1] + "\n\t" + traceback.format_exception(exc_type, exc_value, exc_traceback)[-1]
+
+        if theMsg.find("exit") > -1:
+            AddMsgAndPrint("\n\n")
+            pass
+        else:
+            AddMsgAndPrint(theMsg,2)
 
     except:
-        PrintMsg("Unhandled error in errorMsg method", 2)
+        AddMsgAndPrint("Unhandled error in unHandledException method", 2)
         pass
 
 ## ===================================================================================
@@ -58,14 +101,16 @@ def CheckAreasymbols(asList):
     # in Web Soil Survey. These will be flagged incorrectly.
 
     try:
-        import httplib
-        #import xml.etree.cElementTree as ET
+        # Part of a SOAP request
+        # import httplib
+        # import xml.etree.cElementTree as ET
         # Handle choice list according to the first two parameter values
 
         # select by list of Areasymbols only
         sQuery = "SELECT AREASYMBOL FROM SASTATUSMAP WHERE AREASYMBOL IN (" + str(asList)[1:-1] + ") AND SAPUBSTATUSCODE = 2 ORDER BY AREASYMBOL"
 
-        theURL = "https://sdmdataaccess.nrcs.usda.gov/Tabular/SDMTabularService/post.rest"
+        #theURL = "https://sdmdataaccess.nrcs.usda.gov/Tabular/SDMTabularService/post.rest"
+        url = r'https://SDMDataAccess.sc.egov.usda.gov/Tabular/post.rest'
 
         # Create request using JSON, return data as JSON
         dRequest = dict()
@@ -73,9 +118,9 @@ def CheckAreasymbols(asList):
         dRequest["query"] = sQuery
         jData = json.dumps(dRequest)
 
-        # Send request to SDA Tabular service using urllib2 library
-        req = urllib2.Request(theURL, jData)
-        resp = urllib2.urlopen(req)
+        # Send request to SDA Tabular service using urllib library for ArcGIS Pro
+        jData = jData.encode('ascii')
+        resp = urllib.request.urlopen(url,jData)
         jsonString = resp.read()      # {"Table":[["MT605"],["MT610"],["MT612"]]}
 
         # Convert the returned JSON string into a Python dictionary.
@@ -138,30 +183,25 @@ def CheckAreasymbols(asList):
             if len(asList) > len(valList):
                 # Incomplete match, look at each to find the problem(s)
                 missingList = [x for x in asList if not x in valList]
-                PrintMsg("\n\tAreasymbols with no match in Web Soil Survey: " + ", ".join(missingList), 1)
+                AddMsgAndPrint("\n\tThe following Areasymbol(s) do not match in Web Soil Survey: " + ", ".join(missingList), 1)
                 return False
 
             else:
                 # Number of areasymbols match, should be good
-                PrintMsg("\tAll areasymbol values in spatial data have a match in Web Soil Survey", 0)
+                AddMsgAndPrint("\tAll areasymbol values in spatial data have a match in Web Soil Survey")
                 return True
 
         else:
             # Failed to find a match for any surveys
-            PrintMsg("\nFailed to find a match for any of the input Areasymbols", 2)
+            AddMsgAndPrint("\nFailed to find a match for any of the input Areasymbols",2)
             return False
 
     except:
-        tb = sys.exc_info()[2]
-        tbinfo = traceback.format_tb(tb)[0]
-        err = tbinfo + " \n" + str(sys.exc_type)+ ": " + str(sys.exc_value) + " \n"
-        PrintMsg(err, 2)
+        errorMsg()
         return False
 
 ## ===================================================================================
-def ProcessLayer(inLayer, inFields, bValidate):
-    # Create a summary for each survey
-    #
+def checkSSURGOAttributesFormat(inLayer, inFields):
     # inLayer = selected featurelayer or featureclass that will be processed
     #
     # length of 5
@@ -173,208 +213,158 @@ def ProcessLayer(inLayer, inFields, bValidate):
     # valid format
 
     try:
-        bGood = True
+        bAreaSymError = False
+        bFldValueErrors = False
 
         validText = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
         validNum = "0123456789"
         validMusym = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-+._"
-        fieldList = ["OID@","AREASYMBOL"]
+        fieldList = ["OID@"]
 
         for fld in inFields:
             if fld not in fieldList:
-                fieldList.append(fld)
+                fieldList.append(fld.upper())
 
-        polygonList = list()
-        asList = list()
+        badAreaSymbolList = list() # list of polygon ids that have erroneous areasymbol
+        badFldValueList = list()   # list of polygon ids that have bad musyms
+        asList = list()       # List of unique areasymbols
 
         iCnt = int(arcpy.GetCount_management(inLayer).getOutput(0))
-        arcpy.SetProgressor("step", "Checking input features...", 0, iCnt, 1)
+        arcpy.SetProgressor("step", "Checking Attributes", 0, iCnt, 1)
 
         with arcpy.da.SearchCursor(inLayer, fieldList) as sCursor:
-            # Select polgyons with the current attribute value and process the geometry for each
-            for row in sCursor:
-                # Process a polygon record
-                fid = row[0]
-                chk1 = ""   # L = wrong length; BF = bad format (2C3I); C = wrong case
-                chk2 = ""
 
+            for row in sCursor:
+                fid = row[0]  # polygon ID
+
+                # iterate through fields skipping the first field which is OID
                 for i in range(1, len(fieldList)):
-                    # Skip first field which is OBJECTID
-                    fld = fieldList[i]
+
+                    fldName = fieldList[i]
                     val = row[i]
 
-                    if not val is None:
+                    # Handle Areasymbol differently because it has more specific criteria
+                    if fldName == "AREASYMBOL":
 
-                        if fld == "AREASYMBOL":
-                            # Handle Areasymbol differently because it has more specific criteria
-                            if len(val) == 5:
-                                # length is OK
-                                if not val[0] in validText or not val[1] in validText:
-                                    # First 2 characters should be text
-                                    chk1 = "BF"
-
-                                elif not val[2] in validNum or not val[3] in validNum or not val[3] in validNum:
-                                    # Last 3 characters should be integer
-                                    chk1 = "BF"
-
-                                elif val.upper() != val:
-                                    chk1 = "C"
+                        # Areasymbol must be 5 characters
+                        if not len(val) == 5:
+                            if len(val.strip()) == 0:
+                                badAreaSymbolList.append([fid,"NULL"])
                             else:
-                                # Bad length, should be 5 characters
-                                chk1 = "L"
+                                badAreaSymbolList.append([fid,val])
+                            continue
 
-                            if chk1 != "":
-                                bGood = False
-                                PrintMsg("\tBad " + fld + " for polygon " + str(fid) + ": '" + val + "'", 2)
-                                polygonList.append(fid)
+                        # First 2 characters should be text if not assign Bad Format (BF)
+                        elif not val[0] in validText or not val[1] in validText:
+                            badAreaSymbolList.append([fid,val])
 
-                            else:
-                                # Should be a correctly formatted areasymbol value
-                                if not val in asList:
-                                    asList.append(val.encode('ascii'))
+                        # Last 3 characters should be integer if not assign Bad Format (BF)
+                        elif not val[2] in validNum or not val[3] in validNum or not val[3] in validNum:
+                            badAreaSymbolList.append([fid,val])
 
-                        # Check other attribute
-                        # All we know is it is text field, don't know specifics
+                        # Must be uppercase if not assign wrong case (C)
+                        elif val.upper() != val:
+                            badAreaSymbolList.append([fid,val])
+
                         else:
-                            chk2 = ""
+                            # areasymbol value is correctly formatted
+                            if not val in asList:
+                                asList.append(val)
 
-                            if len(val) > 0:
-                                # length is OK
-
-                                if len(val) > len(val.strip()):
-                                    #PrintMsg("\tsym for polygon " + str(fid)  + str(fid) + ":  '" + str(muSym) + "'", 0)
-                                    chk2 = False
-                                    polygonList.append(fid)
-
-                                else:
-                                    for c in val:
-                                        if not c in validMusym:
-                                            bGood2 = False
-                                            #PrintMsg("\tBad musym for polygon " + str(fid) + ":  '" + str(muSym) + "'", 0)
-                                            polygonList.append(fid)
-                                            chk2 = False
-                                            break
-
-                            else:
-                                # Blank value for musym
-                                #PrintMsg("\tMissing musym for polygon " + str(fid), 0)
-                                chk2 = "L"
-
-                            if chk2 != "":
-                                bGood = False
-                                PrintMsg("\tBad " + fld + " for polygon " + str(fid) + ": '" + val + "'", 2)
-
-                                if not fid in polygonList:
-                                    # Add problem polygon to list for end report
-                                    polygonList.append(fid)
-
+                    # Check other attribute (MUSYM or MUKEY)
+                    # All we know is it is text field, don't know specifics
                     else:
-                        PrintMsg("\tBad " + fld + " for polygon " + str(fid) + ": '" + str(val) + "'", 2)
-                        polygonList.append(fid)
+                        # fld must be populated
+                        if len(val) < 1 or val == " ":
+                            badFldValueList.append([fid,fldName,"NULL"])
+
+                        # Value cannot have spaces
+                        elif len(val) > len(val.strip()):
+                            badFldValueList.append([fid,fldName,val])
+
+                        # All characters must be valid
+                        else:
+                            for char in val:
+                                if not char in validMusym:
+                                    #AddMsgAndPrint("\tBad MUSYM for polygon " + str(fid) + ":  '" + str(muSym) + "'")
+                                    badFldValueList.append([fid,fldName,val])
+                                    break
 
                 arcpy.SetProgressorPosition()
 
         arcpy.ResetProgressor()
 
-        if bGood == False:
-            PrintMsg(" \nThe following polygon IDs have attribute formatting errors: " + str(polygonList)[1:-1] + " \n ", 2)
+        # Report errors with Areasymbol values
+        if badAreaSymbolList:
+            AddMsgAndPrint("\nThe following Polygon IDs have AREASYMBOL formatting errors:",2)
+            AddMsgAndPrint("Polygon ID - Areasymbol",2)
+            AddMsgAndPrint("----------   ----------",2)
 
-        if bValidate:
-            # Run the list of correctly formatted areasymbol values to make sure they exist in Web Soil Survey
-            # What about Initial Soil Surveys with a new AREASYMBOL?
-            #
-            PrintMsg(" \nValidating " + str(len(asList)) + " Areasymbol(s) against Web Soi Survey: ", 0)
+            # Didn't wound up using
+            col_width = max(len(str(word)) for error in badAreaSymbolList for word in error) + 3
+
+            for row in badAreaSymbolList:
+                AddMsgAndPrint("".join(str(word).ljust(13) for word in row),1)
+
+        # Report errors with bad field values
+        if badFldValueList:
+            AddMsgAndPrint("\nThe following Polygon IDs have invalid characters:",2)
+            AddMsgAndPrint("Polygon ID - Field Name - Attribute",2)
+            AddMsgAndPrint("----------   ----------   ---------",2)
+            for row in badFldValueList:
+                AddMsgAndPrint("".join(str(word).ljust(13) for word in row),1)
+
+        # Validate AREASYMBOLs against WSS if it was one of the fields
+        # What about Initial Soil Surveys with a new AREASYMBOL?
+        if "AREASYMBOL" in fieldList and len(asList):
+            AddMsgAndPrint("\nValidating " + str(len(asList)) + " Areasymbol(s) against Web Soil Survey")
             bValid = CheckAreasymbols(asList)
 
-        return bGood
-
-    except MyError, e:
-        # Example: raise MyError, "This is an error message"
-        PrintMsg(str(e) + " \n", 2)
-        bGood = False
-
-    except:
-        errorMsg()
-        bGood = False
-
-## ===================================================================================
-def Number_Format(num, places=0, bCommas=True):
-    try:
-    # Format a number according to locality and given places
-        #locale.setlocale(locale.LC_ALL, "")
-        if bCommas:
-            theNumber = locale.format("%.*f", (places, num), True)
-
+        if not badAreaSymbolList or not badFldValueList:
+            return True
         else:
-            theNumber = locale.format("%.*f", (places, num), False)
-        return theNumber
+            return False
 
     except:
         errorMsg()
-        return FalseoutputPoin
+        bFldValueErrors = False
 
 ## ===================================================================================
-## MAIN
-import sys, string, os, locale, time, math, operator, traceback, collections, arcpy, json,urllib2
-from urllib2 import urlopen, URLError, HTTPError
+import sys, os, traceback, collections, arcpy, json, urllib
+from urllib.request import urlopen, URLError, HTTPError
 from arcpy import env
 
-try:
-    # Set formatting for numbers
-    locale.setlocale(locale.LC_ALL, "")
-
-    # Script parameters
-
-    # Target Layer
-    inLayer = arcpy.GetParameter(0)
-
-    # Target attribute column
-    inFields = arcpy.GetParameter(1)
-
-##    PrintMsg(str(type(inFields)))
-##    PrintMsg(str(inFields))
-##    exit()
-
-    # Setup: Get all required information from input layer
-    #
-    # Describe input layer
-    desc = arcpy.Describe(inLayer)
-    theDataType = desc.dataType.upper()
-    theCatalogPath = desc.catalogPath
-
-    if theDataType == "FEATURELAYER":
-        # input layer is a FEATURELAYER, get featurelayer specific information
-        fc = desc.catalogPath
-        PrintMsg(" \nLooking for attribute value problems in featurelayer " + desc.name + "...", 0)
-
-    elif theDataType in ["FEATURECLASS", "SHAPEFILE"]:
-        # input layer is a featureclass, get featureclass specific information
-        PrintMsg(" \nLooking for attribute value problems in featureclass " + desc.name + "...", 0)
-        fc = inLayer
-
-    # End of Setup
-    #
-
-    bValidate = True
-
-    bGood = ProcessLayer(fc, inFields, bValidate)
-
-    if bGood:
-        PrintMsg(" \nProcessing complete with no attribute formatting errors found\n ", 0)
-
-    else:
-        PrintMsg("Processing complete, but attribute formatting errors found\n ", 2)
-
-
-except MyError, e:
-    # Example: raise MyError, "This is an error message"
-    PrintMsg(str(e) + " \n", 2)
-
-except:
-    errorMsg()
+if __name__ == '__main__':
 
     try:
-        del inLayer
+        # Script parameters
+        inLayer = arcpy.GetParameter(0)  # Target Layer
+        inFields = arcpy.GetParameter(1) # Python list of fields
 
-    except NameError:
-        pass
+        arcpy.env.parallelProcessingFactor = "75%"
+
+        # Setup: Get all required information from input layer
+        # Describe input layer
+        descInput = arcpy.da.Describe(inLayer)
+        inputDT = descInput['dataType'].upper()
+        theCatalogPath = descInput['catalogPath']
+        inputName = descInput['name']
+
+        if inputDT == "FEATURELAYER":
+            # input layer is a FEATURELAYER, get featurelayer specific information
+            fc = theCatalogPath
+
+        elif inputDT in ["FEATURECLASS", "SHAPEFILE"]:
+            # input layer is a featureclass, get featureclass specific information
+            fc = inLayer
+
+        AddMsgAndPrint("\nLooking for attribute value problems in layer: " + inputName)
+        bGood = checkSSURGOAttributesFormat(fc, inFields)
+
+        if bGood:
+            AddMsgAndPrint("\nProcessing complete with no attribute formatting errors found\n")
+        else:
+            AddMsgAndPrint("\nProcessing complete, but attribute formatting errors were found\n",2)
+
+    except:
+        errorMsg()

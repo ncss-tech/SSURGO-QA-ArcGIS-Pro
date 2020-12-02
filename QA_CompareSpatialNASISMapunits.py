@@ -329,9 +329,6 @@ from arcpy import env
 if __name__ == '__main__':
 
     try:
-        # Use most of the cores on the machine where ever possible
-        arcpy.env.parallelProcessingFactor = "75%"
-
         theInput = arcpy.GetParameterAsText(0)
         asValues = arcpy.GetParameter(1)    # value list containing Areasymbol
         bUpdate = arcpy.GetParameter(2)
@@ -339,6 +336,9 @@ if __name__ == '__main__':
         mx2 = arcpy.GetParameter(4)   # approved
         mx3 = arcpy.GetParameter(5)   # correlated
         mx4 = arcpy.GetParameter(6)   # additional
+
+        # Use most of the cores on the machine where ever possible
+        arcpy.env.parallelProcessingFactor = "75%"
 
         # Describe input layer and get workspace location
         desc = arcpy.da.Describe(theInput)

@@ -286,15 +286,13 @@ def splitThousands(someNumber):
         return someNumber
 
 ## ===================================================================================
-
 # Import system modules
 import sys, os, traceback, locale, time, re, arcpy
-
 
 if __name__ == '__main__':
 
     try:
-        # Script arguments...
+        # Script parameters
         inLayer = arcpy.GetParameter(0)                # required input soils layer, need to make sure it has MUKEY field
         inField1 = arcpy.GetParameterAsText(1)         # primary attribute field whose values will be compared
         inField2 = arcpy.GetParameterAsText(2)         # optional secondary attribute field whose values will be compared
@@ -320,7 +318,7 @@ if __name__ == '__main__':
         if inField2 != "":
             inField2 = arcpy.ParseFieldName(inField2).split(",")[3].strip()
 
-        # Start by getting information about the input layer
+        # Describe input layer
         descInput = arcpy.da.Describe(inLayer)
         inputDT = descInput['dataType'].upper()
 
