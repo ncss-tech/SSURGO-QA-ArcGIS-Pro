@@ -11,7 +11,7 @@ Setup|Generate Regional Transactional Geodatabase||
 Setup|Import SSURGO Datasets into FGDB by Map||
 Setup|Import SSURGO or STATSGO Datasets into FGDB||
 Setup|Insert NATSYM and MUNAME Value||
-Quality Assurance|Check Attributes||
+Quality Assurance|Check Attributes|X|
 Quality Assurance|Compare Spatial-NASIS Mapunits|X|
 Quality Assurance|Find Common Lines|X|
 Quality Assurance|Find Common Points||
