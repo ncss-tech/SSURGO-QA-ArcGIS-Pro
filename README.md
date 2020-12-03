@@ -14,7 +14,7 @@ Setup|Insert NATSYM and MUNAME Value||
 Quality Assurance|Check Attributes|X|
 Quality Assurance|Compare Spatial-NASIS Mapunits|X|
 Quality Assurance|Find Common Lines|X|
-Quality Assurance|Find Common Points||
+Quality Assurance|Find Common Points|X|
 Quality Assurance|Find Edge Matching Errors||
 Quality Assurance|Find Multipart Features||
 Quality Assurance|Find Slivers||
