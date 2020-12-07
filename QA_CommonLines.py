@@ -346,9 +346,6 @@ if __name__ == '__main__':
         arcpy.env.workspace = theWorkspace
         arcpy.env.overwriteOutput = True
 
-##        # Set scratchworkspace and then proceed with processing
-##        if setScratchWorkspace():
-
         # get the first input field object
         chkFields = arcpy.ListFields(inputFC)
 
