@@ -62,6 +62,7 @@ def AddMsgAndPrint(msg, severity=0):
             arcpy.AddError("\n" + msg)
 
     except:
+        errorMsg()
         pass
 
 # ==============================================================================================================================
@@ -183,7 +184,6 @@ def MakeOutLayer(inLayer, sr, inField1, inField2, fldLength):
 
         else:
             # create the appropriate attribute field in the common points featureclass
-            #
             # begin by getting all of the original field properties
             theField = arcpy.ListFields(theCatalogPath, newFld1 + "*")[0] # get the input polygon field object
             fieldAlias = theField.aliasName
@@ -195,130 +195,90 @@ def MakeOutLayer(inLayer, sr, inField1, inField2, fldLength):
             # Add new field to track status of each point
             arcpy.AddField_management(os.path.join(env.workspace, outLayer), "Status", "TEXT", "", "", 10, "Status")
 
-            return outLayer, newFld1
+            return os.path.join(env.workspace,outLayer), newFld1
 
     except:
         errorMsg()
         return "",""
 
 # ==============================================================================================================================
-def AddLayerToArcGISPro(inLayer,lyrxPath):
+def AddLayerToArcGISPro(inLayer,symbologyLyr,newLyrName=False):
+    # Description
+    # This function will symbolize a layer using an existing symbology file
+    # and add the symbolized layer to the first map in the current ArcGIS Pro Session
+    # The connection properties of the symbology layer are updated to reflect the new
+    # path of the datasource that w
 
-    def UpdateLyrxSymbology(lyrxObj):
+    # Parameters:
+    # inLayer - catalog path to the layer that will be symbolized using
+    #                 a .lyrx file.  This layer can be a FGDB feature class,
+    #                 shapefile or layer created using the 'MakeFeatureLayer' tool
+    # symbologyLry - catalog path to the symbology file that will be used to symbolize the
+    #                fcToSymbolize layer.  The file can be a .lyr or .lyrx.  If the symbology
+    #                file is an .lyr then a .lyrx will be created to avoid problems with
+    #                updating connection properties
+    # newName - Optional string parameter to update the name of the layer after its been added
+    #           to the ArcGIS Pro Session.  The datasource name of the layer is not changed.
+    #           Only the name layer name as it appears in the table of contents.
 
-        sym = lyrxObj.symbology
+    # Returns Nothing
 
-        if sym.renderer.type == 'UniqueValueRenderer':
-            sym.updateRenderer('UniqueValueRenderer')
+    # Future Upgrades
+    # - Test to make sure the symbology rendering field has a corresponding field in the inLayer
+    #   This will not make much of a difference with 'SimpleRenderer' symbology types
+    # - Determine which map to insert layer into if ArcGIS Pro Session has multiple maps.
 
-            # This is the field used to render the symbology i.e. [hydgrp]
-            rendererFld = sym.renderer.fields
-
-            # These are the values found in the FC being symbolized
-            uniqueValues = list(set([row[0] for row in arcpy.da.SearchCursor(ssurgoFC,rendererFld)]))
-
-            # Get a list of unique Values in the symbology renderer
-            uniqueRendererValues = list()
-            for grp in sym.renderer.groups:
-                for itm in grp.items:
-                    uniqueRendererValues.append(itm.values[0][0])
-
-            # remove symbology values that are not present in the FC
-            for val in uniqueValues:
-                if val in uniqueRendererValues:
-                    uniqueRendererValues.remove(val)
-
-            if len(uniqueRendererValues) > 0:
-                for val in uniqueRendererValues:
-                    sym.renderer.removeValues({rendererFld[0]: [val]})
-                    lyrxObj.symbology = sym
-    # ------------------------------------------------------------------
     try:
+        desc = arcpy.da.Describe(inLayer)
+        inLayerPath = desc['catalogPath']
+        inLayerName = desc['name']
+
         aprx = arcpy.mp.ArcGISProject("CURRENT")
+        aprxMap = aprx.listMaps('*')[0]
 
-        for maps in aprx.listMaps():
-            for lyr in maps.listLayers():
-                if lyr.name in datasetsBaseName:
-                    maps.removeLayer(lyr)
+        if arcpy.Exists(symbologyLyr):
 
-            if arcpy.Exists(lyrxPath):
-                lyrxObject = arcpy.mp.LayerFile(lyrxPath).listLayers()[0]  # create a layer object
+            # Create an .lyrx file from .lyr
+            if lyrxPath.endswith('.lyr'):
+                lyrxObject = arcpy.mp.LayerFile(symbologyLyr).listLayers()[0]     # create a layer object from .lyr
+                newLyrxFile = symbologyLyr + "x"                                  # Path to new lyrx file
+                lyrxObject.saveACopy(newLyrxFile)                             # Create new lyrx file
+                lyrxObject = arcpy.mp.LayerFile(newLyrxFile).listLayers()[0]  # create a layer object from .lyrx
 
-                # Connection Property Dictionary
-                # {'dataset': 'SSURGO_WCT',
-                #  'workspace_factory': 'File Geodatabase',
-                #  'connection_info': {'database': 'E:\\python_scripts\\GitHub\\SSURGO_WCT\\Wetland_Workspace.gdb'}}
-                lyrxConnectProperties = lyrxObject.connectionProperties
-
-                # update CP dictionary database and dataset keys
-                lyrxConnectProperties['connection_info']['database'] = os.path.dirname(inLayer)
-                lyrxConnectProperties['dataset'] = os.path.basename(inLayer)
-                lyrxObject.updateConnectionProperties(lyrxObject.connectionProperties,lyrxConnectProperties)
-
+            # .lyrx file exists
             else:
-                AddMsgAndPrint(lyrxPath + " is missing",1)
+                lyrxObject = arcpy.mp.LayerFile(symbologyLyr).listLayers()[0]  # create a layer object from .lyrx
 
-            # 'SSURGO Layers' group layer object
-            groupLayerPath = os.path.join(scriptPath,r'SSURGO_WCT_EmptySSURGOGroupLayer.lyrx')
-            groupLayerObject = arcpy.mp.LayerFile(groupLayerPath).listLayers()[0]
-            groupLayerName = groupLayerObject.name  # 'SSURGO Layers'
+            # Connection Property Dictionary
+            # {'dataset': 'SSURGO_WCT',
+            #  'workspace_factory': 'File Geodatabase',
+            #  'connection_info': {'database': 'E:\\python_scripts\\GitHub\\SSURGO_WCT\\Wetland_Workspace.gdb'}}
+            lyrxConnectProperties = lyrxObject.connectionProperties
 
-            # Boolean to determine if 'SSURGO Layers' group exists in ArcGIS Pro Session
-            bGroupLayerExists = False
-            bAddedLyrxFilesToPro = False
+            # update CP dictionary database and dataset keys
+            lyrxConnectProperties['connection_info']['database'] = os.path.dirname(inLayerPath)
+            lyrxConnectProperties['dataset'] = inLayerName
+            lyrxObject.updateConnectionProperties(lyrxObject.connectionProperties,lyrxConnectProperties)
 
-            # This is the map object where the lyrx files were added to
-            mapObject = ""
+            # Add layer to active map
+            aprxMap.addLayer(lyrxObject,"TOP")
 
-            # G
-            for map in aprx.listMaps():
-                for mapLyr in map.listLayers():
+            # Rename newly added layer to user
+            if newLyrName:
 
-                    # 'SSURGO Layers' group exists in Pro Session
-                    # Add the layers in lyrxToAddToArcPro list to ArcPro
-                    if mapLyr.name == groupLayerName and mapLyr.isGroupLayer:
-                        bGroupLayerExists = True
-                        mapObject = map
+                # Grab the top layer and rename it
+                recentlyAddedLyr = aprxMap.listLayers()[0]
+                recentlyAddedLyr.name = newLyrName
 
-                        for lyrx in lyrxToAddToArcPro:
-                            map.addLayerToGroup(mapLyr,lyrx)
-                            bAddedLyrxFilesToPro = True
-                            AddMsgAndPrint("Adding Layer to ArcGIS Pro: " + lyrx.name)
-                break
-
-            # Get existing group layer object
-            if not bGroupLayerExists:
-
-                # Add group layer to ArcGIS Pro Session
-                aprxMap = aprx.activeMap
-                mapObject = aprxMap
-                aprxMap.addLayer(groupLayerObject, 'TOP')
-
-                # Get added group layer
-                mapGroupLayer = [lyr for lyr in aprxMap.listLayers(groupLayerName)][0]
-
-                # 'SSURGO Layers' group exists in Pro Session
-                # Add the layers in lyrxToAddToArcPro list to ArcPro
-                for lyrx in lyrxToAddToArcPro:
-                    map.addLayerToGroup(mapGroupLayer,lyrx)
-                    bAddedLyrxFilesToPro = True
-                    AddMsgAndPrint("Adding Layer to ArcGIS Pro: " + lyrx.name)
-
-            # Update symbology
-            aprx = arcpy.mp.ArcGISProject("CURRENT")
-            for lyr in mapObject.listLayers():
-
-                # This is the 'SSURGO Layers' Group
-                # iterate through the nested layers and up
-                # the symbology
-                if lyr.name == groupLayerName and lyr.isGroupLayer:
-                    for newLayer in lyr.listLayers():
-                        UpdateLyrxSymbology(newLayer)
+        # Symbology layer does NOT exist.  Add layer to ArcGIS Pro Session with no symbology
+        else:
+            lyr = aprxMap.addDataFromPath(inLayerPath)
+            AddMsgAndPrint("Added " + inLayerName + " to ArcGIS Pro but could not symbolize it",1)
+            AddMsgAndPrint("bc " + lyrxPath + " does not exist",1)
 
     except:
         errorMsg()
         AddMsgAndPrint("Couldn't Add Layers to your ArcGIS Pro Session",1)
-        pass
 
 ## ===================================================================================
 # Import system modules
@@ -332,6 +292,12 @@ if __name__ == '__main__':
         inLayer = arcpy.GetParameterAsText(0)  # single polygon featurelayer as input parameter
         inField1 = arcpy.GetParameterAsText(1) # attribute column used in selection
         inField2 = arcpy.GetParameterAsText(2) # secondary attribute column (usually AREASYMBOL)
+
+##        lyrFile = r'E:\python_scripts\GitHub\SSURGO-QA_ArcPro\GreenDot.lyr'
+##        cp = r'E:\Temp\WI025\spatial\QA_Common_Points_MUSYM_AREASYMBOL.shp'
+##
+##        AddLayerToArcGISPro(cp,lyrFile,"Just a Test")
+##        exit()
 
         arcpy.env.parallelProcessingFactor = "75%"
         arcpy.env.overwriteOutput = True
@@ -469,7 +435,6 @@ if __name__ == '__main__':
         arcpy.ResetProgressor()  # completely finished reading all polygon geometry
 
         # if common-points were found, create a point shapefile containing the attribute value for each point
-        #
         if len(dDups) > 0:
             AddMsgAndPrint("Total of " + splitThousands(iCnt) + " 'common points' found in " + inLayer, 2)
 
@@ -497,36 +462,17 @@ if __name__ == '__main__':
             arcpy.ResetProgressor()
             arcpy.SetProgressorLabel("Process complete...")
 
-            try:
-                AddMsgAndPrint("A")
-                AddMsgAndPrint(os.path.join(env.workspace,outLayer))
-                # if this is ArcMap and if geoprocessing setting automatically adds layer, then
-                # import symbology from layer fill
-                arcpy.env.addOutputsToMap = True
-                aprx = arcpy.mp.ArcGISProject("CURRENT")
-                aprxMap = aprx.listMaps()[0]
+            # Add QA Common Points to ArcGIS Pro Session
+            scriptPath = os.path.dirname(__file__)
+            lyrxFile = os.path.join(scriptPath,"QA_Common_Points_GreenDot.lyrx")
 
-                layerPath = os.path.dirname(__file__)
-                layerFile = os.path.join(layerPath,"GreenDot.lyr")
-                AddMsgAndPrint(layerFile)
+            if fld2Name != "":
+                outLayerName = "QA Common Points (" + fld2NameU.title() + ":" + fld1NameU.title() + ")"
+            else:
+                outLayerName = "QA Common Points (" + fld1NameU.title() + ")"
 
-                if fld2Name != "":
-                    outLayerName = "QA Common Points (" + fld2NameU.title() + ":" + fld1NameU.title() + ")"
+            AddLayerToArcGISPro(outLayer,lyrxFile,outLayerName)
 
-                else:
-                    outLayerName = "QA Common Points (" + fld1NameU.title() + ")"
-
-                arcpy.MakeFeatureLayer_management(os.path.join(env.workspace,outLayer),outLayerName)
-                arcpy.ApplySymbologyFromLayer_management(outLayerName, layerFile)
-
-                aprxMap.addLayer(layerFile)
-                #arcpy.SetParameterAsText(3, outLayerName)
-
-                AddMsgAndPrint(" \nAdded " + outLayerName + " to ArcPro TOC")
-
-            except:
-                errorMsg()
-                pass
 
         else:
             AddMsgAndPrint("\nNo common-point issues found with '" + inLayer + "' \n ")
