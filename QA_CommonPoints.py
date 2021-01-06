@@ -236,18 +236,21 @@ def AddLayerToArcGISPro(inLayer,symbologyLyr,newLyrName=False):
         aprx = arcpy.mp.ArcGISProject("CURRENT")
         aprxMap = aprx.listMaps('*')[0]
 
+        # .lyr or .lyrx exists
         if arcpy.Exists(symbologyLyr):
 
             # Create an .lyrx file from .lyr
             if lyrxPath.endswith('.lyr'):
                 lyrxObject = arcpy.mp.LayerFile(symbologyLyr).listLayers()[0]     # create a layer object from .lyr
                 newLyrxFile = symbologyLyr + "x"                                  # Path to new lyrx file
-                lyrxObject.saveACopy(newLyrxFile)                             # Create new lyrx file
-                lyrxObject = arcpy.mp.LayerFile(newLyrxFile).listLayers()[0]  # create a layer object from .lyrx
+                lyrxObject.saveACopy(newLyrxFile)                                 # Create new lyrx file
+                lyrxObject = arcpy.mp.LayerFile(newLyrxFile).listLayers()[0]      # create a layer object from .lyrx
 
             # .lyrx file exists
             else:
                 lyrxObject = arcpy.mp.LayerFile(symbologyLyr).listLayers()[0]  # create a layer object from .lyrx
+
+
 
             # Connection Property Dictionary
             # {'dataset': 'SSURGO_WCT',

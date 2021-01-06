@@ -1,157 +1,107 @@
 # QA_MultipartPolygons.py
-#
-# ArcMap 10.1, arcpy
-#
-# Steve Peaslee, USDA-NRCS National Soil Survey Center
+# Created 11-05-2013
 #
 # Adapted from Vertex Report tool
-# 11-05-2013
 
-class MyError(Exception):
-    pass
+# Author: Steve.Peaslee
+#         GIS Specialist
+#         National Soil Survey Center
+#         USDA - NRCS
+# e-mail: adolfo.diaz@usda.gov
+# phone: 608.662.4422 ext. 216
 
-## ===================================================================================
-def PrintMsg(msg, severity=0):
+# Author: Adolfo.Diaz
+#         GIS Specialist
+#         National Soil Survey Center
+#         USDA - NRCS
+# e-mail: adolfo.diaz@usda.gov
+# phone: 608.662.4422 ext. 216
+
+# ==========================================================================================
+# Updated  1/6/2020 - Adolfo Diaz
+#
+# - Updated and Tested for ArcGIS Pro 2.5.2 and python 3.6
+# - All describe functions use the arcpy.da.Describe functionality.
+# - All intermediate datasets are written to "in_memory" instead of written to a FGDB and
+#   and later deleted.  This avoids having to check and delete intermediate data during every
+#   execution.
+# - All cursors were updated to arcpy.da
+# - Added code to remove layers from an .aprx rather than simply deleting them
+# - Updated AddMsgAndPrint to remove ArcGIS 10 boolean and gp function
+# - Updated errorMsg() Traceback functions slightly changed for Python 3.6.
+# - Added parallel processing factor environment
+# - swithced from sys.exit() to exit()
+# - All gp functions were translated to arcpy
+# - Every function including main is in a try/except clause
+# - Main code is wrapped in if __name__ == '__main__': even though script will never be
+#   used as independent library.
+# - Normal messages are no longer Warnings unnecessarily.
+
+
+# ==============================================================================================================================
+def AddMsgAndPrint(msg, severity=0):
+    # prints message to screen if run as a python script
     # Adds tool message to the geoprocessor
     #
     #Split the message on \n first, so that if it's multiple lines, a GPMessage will be added for each line
     try:
-        for string in msg.split('\n'):
-            #Add a geoprocessing message (in case this is run as a tool)
-            if severity == 0:
-                arcpy.AddMessage(string)
 
-            elif severity == 1:
-                arcpy.AddWarning(string)
+        #print(msg)
 
-            elif severity == 2:
-                arcpy.AddMessage("    ")
-                arcpy.AddError(string)
+        if severity == 0:
+            arcpy.AddMessage(msg)
 
-    except:
-        pass
+        elif severity == 1:
+            arcpy.AddWarning(msg)
 
-## ===================================================================================
-def errorMsg():
-    try:
-        tb = sys.exc_info()[2]
-        tbinfo = traceback.format_tb(tb)[0]
-        theMsg = tbinfo + "\n" + str(sys.exc_type)+ ": " + str(sys.exc_value)
-        PrintMsg(theMsg, 2)
-
-    except:
-        PrintMsg("Unhandled error in errorMsg method", 2)
-        pass
-
-## ===================================================================================
-def setScratchWorkspace():
-    # This function will set the scratchGDB environment based on the scratchWorkspace environment.
-    #
-    # The scratch workspac will typically not be defined by the user but the scratchGDB will
-    # always be defined.  The default location for the scratchGDB is at C:\Users\<user>\AppData\Local\Temp
-    # on Windows 7 or C:\Documents and Settings\<user>\Localsystem\Temp on Windows XP.  Inside this
-    # directory, scratch.gdb will be created.
-    #
-    # If scratchWorkspace is set to something other than a GDB or Folder than the scratchWorkspace
-    # will be set to C:\temp.  If C:\temp doesn't exist than the ESRI scratchWorkspace locations will be used.
-    #
-    # If scratchWorkspace is an SDE GDB than the scratchWorkspace will be set to C:\temp.  If
-    # C:\temp doesn't exist than the ESRI scratchWorkspace locations will be used.
-
-    try:
-        # -----------------------------------------------
-        # Scratch Workspace is defined by user or default is set
-        if arcpy.env.scratchWorkspace is not None:
-
-            # describe scratch workspace
-            scratchWK = arcpy.env.scratchWorkspace
-            descSW = arcpy.Describe(scratchWK)
-            descDT = descSW.dataType.upper()
-
-            # scratch workspace is geodatabase
-            if descDT == "WORKSPACE":
-                progID = descSW.workspaceFactoryProgID
-
-                # scratch workspace is a FGDB
-                if  progID == "esriDataSourcesGDB.FileGDBWorkspaceFactory.1":
-                    arcpy.env.scratchWorkspace = os.path.dirname(scratchWK)
-                    arcpy.env.scratchWorkspace = arcpy.env.scratchGDB
-
-                # scratch workspace is a Personal GDB -- set scratchWS to folder of .mdb
-                elif progID == "esriDataSourcesGDB.AccessWorkspaceFactory.1":
-                    arcpy.env.scratchWorkspace = os.path.dirname(scratchWK)
-                    arcpy.env.scratchWorkspace = arcpy.env.scratchGDB
-
-                # scratch workspace is an SDE GDB.
-                elif progID == "esriDataSourcesGDB.SdeWorkspaceFactory.1":
-
-                    # set scratch workspace to C:\Temp; avoid the server
-                    if os.path.exists(r'C:\Temp'):
-
-                        arcpy.env.scratchWorkspace = r'C:\Temp'
-                        arcpy.env.scratchWorkspace = arcpy.env.scratchGDB
-
-                    # set scratch workspace to default ESRI location
-                    else:
-                        arcpy.env.scratchWorkspace = arcpy.env.scratchFolder
-                        arcpy.env.scratchWorkspace = arcpy.env.scratchGDB
-
-            # scratch workspace is simply a folder
-            elif descDT == "FOLDER":
-                arcpy.env.scratchWorkspace = scratchWK
-                arcpy.env.scratchWorkspace = arcpy.env.scratchGDB
-
-            # scratch workspace is set to something other than a GDB or folder; set to C:\Temp
-            else:
-                # set scratch workspace to C:\Temp
-                if os.path.exists(r'C:\Temp'):
-
-                    arcpy.env.scratchWorkspace = r'C:\Temp'
-                    arcpy.env.scratchWorkspace = arcpy.env.scratchGDB
-
-                # set scratch workspace to default ESRI location
-                else:
-                    arcpy.env.scratchWorkspace = arcpy.env.scratchFolder
-                    arcpy.env.scratchWorkspace = arcpy.env.scratchGDB
-
-        # -----------------------------------------------
-        # Scratch Workspace is not defined. Attempt to set scratch to C:\temp
-        elif os.path.exists(r'C:\Temp'):
-
-            arcpy.env.scratchWorkspace = r'C:\Temp'
-            arcpy.env.scratchWorkspace = arcpy.env.scratchGDB
-
-        # set scratch workspace to default ESRI location
-        else:
-
-            arcpy.env.scratchWorkspace = arcpy.env.scratchFolder
-            arcpy.env.scratchWorkspace = arcpy.env.scratchGDB
-
-        return True
+        elif severity == 2:
+            arcpy.AddError("\n" + msg)
 
     except:
         errorMsg()
-        return False
+        pass
 
-## ===================================================================================
+# ==============================================================================================================================
+def errorMsg():
+    try:
+
+        exc_type, exc_value, exc_traceback = sys.exc_info()
+        theMsg = "\t" + traceback.format_exception(exc_type, exc_value, exc_traceback)[1] + "\n\t" + traceback.format_exception(exc_type, exc_value, exc_traceback)[-1]
+
+        if theMsg.find("exit") > -1:
+            AddMsgAndPrint("\n\n")
+            pass
+        else:
+            AddMsgAndPrint(theMsg,2)
+
+    except:
+        AddMsgAndPrint("Unhandled error in unHandledException method", 2)
+        pass
+
+# ===================================================================================
 def ProcessLayer(inLayer, areaSym):
     # Create a summary for each soil survey
     #
     # inLayer = selected featurelayer or featureclass that will be processed
     try:
 
+        # number of multipart features
         iMultipart = 0
+
         fieldList = ["OID@","SHAPE@"]
+
+        # where clause
         sql = '"AREASYMBOL" = ' + "'" + areaSym + "'"
-        saList = list()
+
+        # List containing bad IDs
         polyList = list()
         desc = arcpy.Describe(inLayer)
         oidName = desc.OIDFieldName
 
+        # Select polgyons with the current attribute value and process the geometry for each
         with arcpy.da.SearchCursor(inLayer, fieldList, sql) as sCursor:
-            # Select polgyons with the current attribute value and process the geometry for each
-
             for row in sCursor:
+
                 # Process a polygon record. row[1] is the same as feat or SHAPE
                 fid, feat = row
 
@@ -160,46 +110,36 @@ def ProcessLayer(inLayer, areaSym):
 
                     if iPartCnt > 1:
                         iMultipart += 1
-                        saList.append(fid)
                         polyList.append(fid)
 
                 else:
-                    raise MyError, "NULL geometry for polygon #" + str(fid)
+                    AddMsgAndPrint("NULL geometry for polygon #" + str(fid),1)
 
         if iMultipart > 0:
-            PrintMsg("\t" + areaSym + " has " + Number_Format(iMultipart, 0, True) + " multipart polygons: " + '"' + oidName + '"' + " IN (" + str(polyList)[1:-1] + ")", 1)
+            AddMsgAndPrint("\t" + areaSym + " has " + splitThousands(iMultipart) + " multipart polygons: " + '"' + oidName + '"' + " IN (" + str(polyList)[1:-1] + ")",1)
 
         else:
-            PrintMsg(" \n\t" + areaSym + " has no multipart polygons", 0)
+            AddMsgAndPrint("\n" + "\t" + areaSym + " has no multipart polygons")
 
-        return iMultipart, saList
-
-    except MyError, e:
-        # Example: raise MyError, "This is an error message"
-        PrintMsg(str(e) + " \n", 2)
-        return -1, idList
+        return iMultipart, polyList
 
     except:
         errorMsg()
         return -1, idList
 
-## ===================================================================================
-def Number_Format(num, places=0, bCommas=True):
+# ===================================================================================
+def splitThousands(someNumber):
+    """will determine where to put a thousands seperator if one is needed. Input is
+       an integer.  Integer with or without thousands seperator is returned."""
+
     try:
-    # Format a number according to locality and given places
-        #locale.setlocale(locale.LC_ALL, "")
-        if bCommas:
-            theNumber = locale.format("%.*f", (places, num), True)
-
-        else:
-            theNumber = locale.format("%.*f", (places, num), False)
-        return theNumber
+        return re.sub(r'(\d{3})(?=\d)', r'\1,', str(someNumber)[::-1])[::-1]
 
     except:
         errorMsg()
-        return FalseoutputPoin
+        return someNumber
 
-## ===================================================================================
+# ===================================================================================
 def elapsedTime(start):
     # Calculate amount of time since "start" and return time string
     try:
@@ -266,105 +206,103 @@ def elapsedTime(start):
         return ""
 
 ## ===================================================================================
-## MAIN
-import sys, string, os, locale, time, math, operator, traceback, collections, arcpy
+import sys, string, os, re, locale, time, math, traceback, collections, arcpy
 from arcpy import env
 
-try:
-    # Set formatting for numbers
-    locale.setlocale(locale.LC_ALL, "")
-
-    # Script parameters
-
-    # Target Featureclass
-    inLayer = arcpy.GetParameter(0)
-
-    # Target surveys
-    asList = arcpy.GetParameter(1)
-
-    # survey id
-    inFieldName = "AREASYMBOL"
-
-    # Start timer
-    begin = time.time()
-    eMsg = elapsedTime(begin)
-
-    env.overwriteOutput = True
-
-    # Setup: Get all required information from input layer
-    #
-    # Describe input layer
-    desc = arcpy.Describe(inLayer)
-    theDataType = desc.dataType.upper()
-    theCatalogPath = desc.catalogPath
-
-    if theDataType == "FEATURELAYER":
-        # input layer is a FEATURELAYER, get featurelayer specific information
-        fc = desc.catalogPath
-        PrintMsg(" \nLooking for multipart polygons in featurelayer " + desc.name + "...", 0)
-
-    elif theDataType in ["FEATURECLASS", "SHAPEFILE"]:
-        # input layer is a featureclass, get featureclass specific information
-        PrintMsg(" \nLooking for multipart polygons in featureclass " + desc.name + "...", 0)
-        fc = inLayer
-
-    # End of Setup
-    #
-
-    # run process
-    errorList = list()
-    problemList = list()
-    goodList = list()
-    idList = list()
-
-    for areaSym in asList:
-        #PrintMsg(" \n\tProcessing soil survey: " + areaSym, 0)
-        saList = list()
-
-        if theDataType == "FEATURELAYER":
-            iMultiPart, saList = ProcessLayer(fc, areaSym)
-            idList.extend(saList)
-
-        elif theDataType in ["FEATURECLASS", "SHAPEFILE"]:
-            iMultiPart, saList = ProcessLayer(inLayer, areaSym)
-            idList.extend(saList)
-
-        if iMultiPart == -1:
-            errorList.append(areaSym)
-
-        elif iMultiPart > 0:
-            problemList.append(areaSym)
-
-        else:
-            goodList.append(areaSym)
-
-    if len(problemList) > 0:
-        PrintMsg("The following surveys have multipart polygons: " + ", ".join(problemList) + " \n ", 2)
-        # Select the polygons that are multipart
-        sql = '"OBJECTID" IN ' + "(" + str(idList)[1:-1] + ")"
-        #PrintMsg(" \n" + sql, 0)
-
-        if theDataType == "FEATURELAYER":
-            arcpy.SelectLayerByAttribute_management(inLayer, "NEW_SELECTION", sql)
-            iSel = int(arcpy.GetCount_management(inLayer).getOutput(0))
-            PrintMsg("Selecting all " + Number_Format(iSel, 0, True) + " polygons in the featurelayer that are multipart \n ", 0)
-
-        else:
-            inLayer = desc.name + " MultiPolygons"
-            arcpy.MakeFeatureLayer_management(fc, inLayer, sql)
-
-    if len(errorList) > 0:
-        PrintMsg("The following surveys failed during testing: " + ", ".join(errorList) + " \n ", 2)
-
-except MyError, e:
-    # Example: raise MyError, "This is an error message"
-    PrintMsg(str(e) + " \n", 2)
-
-except:
-    errorMsg()
+if __name__ == '__main__':
 
     try:
-        del inLayer
+        # Set formatting for numbers
+        #locale.setlocale(locale.LC_ALL, "")
 
-    except NameError:
-        pass
+        # Target Featureclass
+        inLayer = arcpy.GetParameter(0)
+
+        # Target surveys
+        asList = arcpy.GetParameter(1)
+
+        # survey id
+        inFieldName = "AREASYMBOL"
+
+        # Check out ArcInfo license for PolygonToLine
+        arcpy.env.parallelProcessingFactor = "75%"
+        arcpy.env.overwriteOutput = True
+
+        # Start timer
+        #begin = time.time()
+        #eMsg = elapsedTime(begin)
+
+        # Setup: Get all required information from input layer
+        #
+        # Describe input layer
+        desc = arcpy.Describe(inLayer)
+        theDataType = desc.dataType.upper()
+        theCatalogPath = desc.catalogPath
+
+        if theDataType == "FEATURELAYER":
+            # input layer is a FEATURELAYER, get featurelayer specific information
+            fc = desc.catalogPath
+            AddMsgAndPrint(" \nLooking for multipart polygons in featurelayer " + desc.name + "...", 0)
+
+        elif theDataType in ["FEATURECLASS", "SHAPEFILE"]:
+            # input layer is a featureclass, get featureclass specific information
+            AddMsgAndPrint(" \nLooking for multipart polygons in featureclass " + desc.name + "...", 0)
+            fc = inLayer
+
+        # run process
+        errorList = list()
+        problemList = list() # List of Areasymbols with multipart features
+        goodList = list()    # List of Areasymbols with no errors
+        idList = list()      # List of Bad ID's
+
+        for areaSym in asList:
+
+            #saList = list()
+
+            if theDataType == "FEATURELAYER":
+                iMultiPart, saList = ProcessLayer(fc, areaSym)
+                idList.extend(saList)
+
+            elif theDataType in ["FEATURECLASS", "SHAPEFILE"]:
+                iMultiPart, saList = ProcessLayer(inLayer, areaSym)
+                idList.extend(saList)
+
+            if iMultiPart == -1:
+                errorList.append(areaSym)
+
+            elif iMultiPart > 0:
+                problemList.append(areaSym)
+
+            else:
+                goodList.append(areaSym)
+
+        AddMsgAndPrint(str(idList))
+
+        if len(problemList) > 0:
+            AddMsgAndPrint("The following surveys have multipart polygons: " + ", ".join(problemList) + "\n",1)
+
+            # Select the polygons that are multipart
+            oidFld = [f.name for f in arcpy.ListFields(inLayer,"*","OID")][0]
+            sql = oidFld + " IN (" + str(idList)[1:-1] + ")"
+
+            if theDataType == "FEATURELAYER":
+                arcpy.SelectLayerByAttribute_management(inLayer, "NEW_SELECTION", sql)
+                iSel = int(arcpy.GetCount_management(inLayer).getOutput(0))
+
+                if iSel == 1:
+                    AddMsgAndPrint("\n" + "Selecting the polygon in the featurelayer that is a multipart" + "\n")
+                else:
+                    AddMsgAndPrint("\n" + "Selecting all " + splitThousands(iSel) + " polygons in the featurelayer that are multipart \n")
+
+            else:
+                inLayer = desc.name + " MultiPolygons"
+                arcpy.MakeFeatureLayer_management(fc, inLayer, sql)
+
+            stringOfIDs = [str(id) for id in idList]
+            AddMsgAndPrint("The following " + oidFld + "'s have multipart features: (" + ", ".join(stringOfIDs) + ")" + "\n",1)
+
+        if len(errorList) > 0:
+            AddMsgAndPrint("The following surveys failed during testing: " + ", ".join(errorList) + "\n ", 1)
+
+    except:
+        errorMsg()
