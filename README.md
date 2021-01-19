@@ -15,7 +15,7 @@ Quality Assurance|Check Attributes|X|
 Quality Assurance|Compare Spatial-NASIS Mapunits|X|
 Quality Assurance|Find Common Lines|X|
 Quality Assurance|Find Common Points|X|
-Quality Assurance|Find Edge Matching Errors||
+Quality Assurance|Find Edge Matching Errors|X|
 Quality Assurance|Find Multipart Features|X|
 Quality Assurance|Find Slivers||
 Quality Assurance|Find Vertex Problems||
