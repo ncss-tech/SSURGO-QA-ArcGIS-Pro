@@ -56,7 +56,7 @@
 # - Normal messages are no longer Warnings unnecessarily.
 
 
-# ==============================================================================================================================
+# ===============================================================================================================
 def AddMsgAndPrint(msg, severity=0):
     # prints message to screen if run as a python script
     # Adds tool message to the geoprocessor
@@ -79,7 +79,7 @@ def AddMsgAndPrint(msg, severity=0):
     except:
         pass
 
-# ==============================================================================================================================
+# ================================================================================================================
 def errorMsg():
     try:
 
@@ -96,7 +96,7 @@ def errorMsg():
         AddMsgAndPrint("Unhandled error in unHandledException method", 2)
         pass
 
-## ===================================================================================
+# ===============================================================================================================
 def setScratchWorkspace():
     """ This function will set the scratchWorkspace for the interim of the execution
         of this tool.  The scratchWorkspace is used to set the scratchGDB which is
