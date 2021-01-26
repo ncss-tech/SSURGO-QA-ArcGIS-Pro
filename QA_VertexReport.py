@@ -1,9 +1,20 @@
+# ---------------------------------------------------------------------------
 # QA_VertexReport.py
-#
-# ArcMap 10.1, arcpy
-#
-# Steve Peaslee, USDA-NRCS National Soil Survey Center
-#
+# Created on: May 20, 2013
+# Author: Steve.Peaslee
+#         GIS Specialist
+#         National Soil Survey Center
+#         USDA - NRCS
+# e-mail: adolfo.diaz@usda.gov
+# phone: 608.662.4422 ext. 216
+
+# Author: Adolfo.Diaz
+#         GIS Specialist
+#         National Soil Survey Center
+#         USDA - NRCS
+# e-mail: adolfo.diaz@usda.gov
+# phone: 608.662.4422 ext. 216
+
 # Identifies polygon line segments shorter than a specified length.
 # Calculate area statistics for each polygon and load into a table
 # Join table by OBJECTID to input featurelayer to spatially enable polygon statistics
@@ -22,6 +33,27 @@
 # the unique values.
 #
 # 10-31-2013
+
+# ==========================================================================================
+# Updated  1/26/2021 - Adolfo Diaz
+#
+# - Updated and Tested for ArcGIS Pro 2.6.1 and python 3.6
+# - All describe functions use the arcpy.da.Describe functionality.
+# - FIDSet now returns None and cannot be compared with ""
+# - All intermediate datasets are written to "in_memory" instead of written to a FGDB and
+#   and later deleted.  This avoids having to check and delete intermediate data during every
+#   execution.
+# - All cursors were updated to arcpy.da
+# - Added code to remove layers from an .aprx rather than simply deleting them
+# - Updated AddMsgAndPrint to remove ArcGIS 10 boolean and gp function
+# - Updated errorMsg() Traceback functions slightly changed for Python 3.6.
+# - Added parallel processing factor environment
+# - swithced from sys.exit() to exit()
+# - All gp functions were translated to arcpy
+# - Every function including main is in a try/except clause
+# - Main code is wrapped in if __name__ == '__main__': even though script will never be
+#   used as independent library.
+# - Normal messages are no longer Warnings unnecessarily.
 
 
 # ===============================================================================================================
@@ -307,8 +339,8 @@ def ProcessLayer(inLayer, inField, outputSR):
         for i in range(6):
             newHdr = newHdr + (" " * (formatList[i] - len(hdrList[i])) + hdrList[i])
 
-        AddMsgAndPrint(" \n" + newHdr, 0)
-        AddMsgAndPrint(dashedLine, 0)
+        AddMsgAndPrint(" \n" + newHdr)
+        AddMsgAndPrint(dashedLine)
 
         #AddMsgAndPrint(" \nSummarizing polygon statistics for " + inField.name + " value: '" + val + "'", 1)
         # initialize variables for the current value (eg. NE109)
@@ -367,7 +399,7 @@ def ProcessLayer(inLayer, inField, outputSR):
 
                             else:
                                 # interior ring encountered
-                                #AddMsgAndPrint("\t\t\tInterior Ring...", 0)
+                                #AddMsgAndPrint("\t\t\tInterior Ring...")
                                 pntList = []  # reset points list for interior ring
 
                 else:
@@ -432,13 +464,13 @@ def ProcessLayer(inLayer, inField, outputSR):
         for i in range(6):
             newTotal = newTotal + (" " * (formatList[i] - len(totalMsg[i])) + totalMsg[i])
 
-        AddMsgAndPrint(newTotal, 0)
+        AddMsgAndPrint(newTotal)
 
         if bHasMultiPart:
             AddMsgAndPrint("Input layer has multipart polygons that require editing (explode)", 2)
 
         # Add QA_VertexReport table to ArcMap TOC
-        AddMsgAndPrint(" \nPolygon statistics saved to " + statsTbl, 0)
+        AddMsgAndPrint(" \nPolygon statistics saved to " + statsTbl)
         arcpy.SetParameter(3, statsTbl)
 
         return True
@@ -483,7 +515,7 @@ def ProcessLayerBySum(inLayer, inField, outputSR):
         if len(uniqueList) > 0:
 
             # only proceed if list contains unique values to be processed
-            AddMsgAndPrint(" \nFound " + Number_Format(len(uniqueList), 0, True) + " unique values for " + inFieldName + " \n ", 0)
+            AddMsgAndPrint(" \nFound " + Number_Format(len(uniqueList), 0, True) + " unique values for " + inFieldName + " \n ")
 
             # if the input is a featurelayer, need to see if there is a selection set or definition query that needs to be maintained
             #
@@ -509,8 +541,8 @@ def ProcessLayerBySum(inLayer, inField, outputSR):
             for i in range(7):
                 newHdr = newHdr + (" " * (formatList[i] - len(hdrList[i])) + hdrList[i])
 
-            AddMsgAndPrint(newHdr, 0)
-            AddMsgAndPrint(dashedLine, 0)
+            AddMsgAndPrint(newHdr)
+            AddMsgAndPrint(dashedLine)
 
             for val in uniqueList:
                 arcpy.SetProgressorLabel("Reading polygon geometry for " + inField.name + " value:  " + str(val)  + "...")
@@ -590,7 +622,7 @@ def ProcessLayerBySum(inLayer, inField, outputSR):
 
                                     else:
                                         # interior ring encountered
-                                        #AddMsgAndPrint("\t\t\tInterior Ring...", 0)
+                                        #AddMsgAndPrint("\t\t\tInterior Ring...")
                                         pntList = []  # reset points list for interior ring
 
                             arcpy.SetProgressorPosition()
@@ -642,7 +674,7 @@ def ProcessLayerBySum(inLayer, inField, outputSR):
                 for i in range(7):
                     newMsg = newMsg + (" " * (formatList[i] - len(statsMsg[i])) + statsMsg[i])
 
-                AddMsgAndPrint(newMsg, 0)
+                AddMsgAndPrint(newMsg)
 
                 #arcpy.SetProgressorPosition()
 
@@ -676,8 +708,8 @@ def ProcessLayerBySum(inLayer, inField, outputSR):
         for i in range(6):
             newTotal = newTotal + (" " * (formatList[i] - len(totalMsg[i])) + totalMsg[i])
 
-        AddMsgAndPrint(dashedLine, 0)
-        AddMsgAndPrint(newTotal, 0)
+        AddMsgAndPrint(dashedLine)
+        AddMsgAndPrint(newTotal)
 
         if bHasMultiPart:
             AddMsgAndPrint("Input layer has multipart polygons that require editing (explode)", 2)
@@ -686,7 +718,7 @@ def ProcessLayerBySum(inLayer, inField, outputSR):
             AddMsgAndPrint("Warning! Input layer has " + str(len(bigPolyList)) + " polygons exceeding the " + Number_Format(maxV) + " vertex limit: " + ", ".join(bigPolyList), 2)
 
         # Add QA_VertexReport table to ArcMap TOC
-        AddMsgAndPrint(" \nPolygon statistics saved to " + statsTbl, 0)
+        AddMsgAndPrint(" \nPolygon statistics saved to " + statsTbl)
         arcpy.SetParameter(3, statsTbl)
         arcpy.SelectLayerByAttribute_management(inLayer, "CLEAR_SELECTION")
 
@@ -737,6 +769,7 @@ def MakeStatsTable(inField, unitAbbrev):
 
             if inFieldName != "":
                 if theExtension == ".dbf":
+                    # A dbf cannot have field names greater than 10 characters
                     newFieldName = arcpy.ParseFieldName(inField.name).split(",")[3].strip()[0:10]
 
                 else:
@@ -744,17 +777,19 @@ def MakeStatsTable(inField, unitAbbrev):
 
                 arcpy.AddField_management(statsTbl, newFieldName, inField.type, inField.precision,inField.scale,inField.length, inField.aliasName)
 
-            arcpy.AddField_management(statsTbl, "ACRES", "DOUBLE", "12", "1","", "Acres")
-            arcpy.AddField_management(statsTbl, "VERTICES", "LONG", "12","","", "Vertex Count")
-            arcpy.AddField_management(statsTbl, "AVI", "DOUBLE", "12", "1", "", "Avg Segment (" + unitAbbrev + ")")
-            arcpy.AddField_management(statsTbl, "MIN_DIST", "DOUBLE", "12", "3", "", "Min Segment (" + unitAbbrev + ")")
-            arcpy.AddField_management(statsTbl, "MULTIPART", "SHORT", "", "", "", "Is Multipart?")
+            # Add fields to the stats table
+            # Field aliases cannot be set in a .dbf
+            arcpy.AddField_management(statsTbl, "ACRES", "DOUBLE", "12", "1","", field_alias="Acres")
+            arcpy.AddField_management(statsTbl, "VERTICES", "LONG", "12","","", field_alias="Vertex Count")
+            arcpy.AddField_management(statsTbl, "AVI", "DOUBLE", "12", "1", "", field_alias="Avg Segment (" + unitAbbrev + ")")
+            arcpy.AddField_management(statsTbl, "MIN_DIST", "DOUBLE", "12", "3", "", field_alias="Min Segment (" + unitAbbrev + ")")
+            arcpy.AddField_management(statsTbl, "MULTIPART", "SHORT", "", "", "", field_alias="Is Multipart?")
 
             try:
                 allFields = arcpy.ListFields(statsTbl)
 
                 for badField in allFields:
-                    #AddMsgAndPrint("\tBadFields: " + badField.name, 0)
+                    #AddMsgAndPrint("\tBadFields: " + badField.name)
                     if badField.name.upper() == "FIELD1":
                         arcpy.DeleteField_management(statsTbl, "Field1")
 
@@ -870,177 +905,179 @@ def elapsedTime(start):
 import sys, string, os, locale, time, math, operator, traceback, collections, arcpy
 from arcpy import env
 
-try:
-    # Set formatting for numbers
-    locale.setlocale(locale.LC_ALL, "")
+if __name__ == '__main__':
 
-    # Script parameters
+    try:
 
-    # Target Featureclass
-    inLayer = arcpy.GetParameter(0)
+        # Set formatting for numbers
+        locale.setlocale(locale.LC_ALL, "")
 
-    # Target field (restricted to TEXT by the ArcTool validator)
-    inFieldName = arcpy.GetParameterAsText(1)
+        # Script parameters
 
-    # Projection (optional when input layer has projected coordinate system)
-    outputSR = arcpy.GetParameter(2)
+        # Target Featureclass
+        inLayer = arcpy.GetParameter(0)
 
-    # Start timer
-    begin = time.time()
+        # Target field (restricted to TEXT by the ArcTool validator)
+        inFieldName = arcpy.GetParameterAsText(1)
 
-    eMsg = elapsedTime(begin)
+        # Projection (optional when input layer has projected coordinate system)
+        outputSR = arcpy.GetParameter(2)
 
-    arcpy.env.parallelProcessingFactor = "75%"
-    arcpy.env.overwriteOutput = True
+        # Start timer
+        #begin = time.time()
+        #eMsg = elapsedTime(begin)
 
-    # reset field parameter to a field object so that the properties can be determined
-    if inFieldName != "":
-        fldList = arcpy.ListFields(inLayer)
-        inField = None
+        arcpy.env.parallelProcessingFactor = "75%"
+        arcpy.env.overwriteOutput = True
 
-        for fld in fldList:
-            if fld.name == inFieldName:
-                inField = fld
+        # reset field parameter to a field object so that the properties can be determined
+        if inFieldName != "":
+            fldList = arcpy.ListFields(inLayer)
+            inField = None
 
-    # Setup: Get all required information from input layer
-    # Describe input layer
-    desc = arcpy.Describe(inLayer)
-    theDataType = desc.dataType.upper()
-    theCatalogPath = desc.catalogPath
-    fidFld = desc.OIDFieldName
-    inputSR = desc.spatialReference
-    inputDatum = inputSR.GCS.datumName
+            for fld in fldList:
+                if fld.name == inFieldName:
+                    inField = fld
 
-    # Set output workspace
-    if arcpy.Describe(os.path.dirname(theCatalogPath)).dataType.upper() == "FEATUREDATASET":
-        # if input layer is in a featuredataset, move up one level to the geodatabase
-        env.workspace = os.path.dirname(os.path.dirname(theCatalogPath))
+        # Setup: Get all required information from input layer
+        # Describe input layer
+        desc = arcpy.da.Describe(inLayer)
+        theDataType = desc['dataType'].upper()
+        theCatalogPath = desc['catalogPath']
+        fidFld = desc['OIDFieldName']
+        inputSR = desc['spatialReference']
+        inputDatum = inputSR.GCS.datumName
 
-    else:
-        env.workspace = os.path.dirname(theCatalogPath)
+        # Set output workspace
+        if arcpy.Describe(os.path.dirname(theCatalogPath)).dataType.upper() == "FEATUREDATASET":
+            # if input layer is in a featuredataset, move up one level to the geodatabase
+            env.workspace = os.path.dirname(os.path.dirname(theCatalogPath))
 
-    AddMsgAndPrint("\nOutput workspace set to: " + env.workspace)
+        else:
+            env.workspace = os.path.dirname(theCatalogPath)
 
-    # Get total number of features for the input featureclass
-    iTotalFeatures = int(arcpy.GetCount_management(theCatalogPath).getOutput(0))
+        AddMsgAndPrint("\nOutput workspace set to: " + env.workspace)
 
-    # Get input layer information and count the number of input features
-    if theDataType == "FEATURELAYER":
-        # input layer is a FEATURELAYER, get featurelayer specific information
-        defQuery = desc.whereClause
-        fids = desc.FIDSet
-        fidList = list()
-        #AddMsgAndPrint(" \nSaved FIDSet: '" + str(fids) + "'", 0)
+        # Get total number of features for the input featureclass
+        iTotalFeatures = int(arcpy.GetCount_management(theCatalogPath).getOutput(0))
 
-        if fids != "":
-            # save list of feature ids in original selection
-            fidList1 = list(fids.split("; "))
+        # Get input layer information and count the number of input features
+        if theDataType == "FEATURELAYER":
+            # input layer is a FEATURELAYER, get featurelayer specific information
+            defQuery = desc['whereClause']
+            fids = desc['FIDSet']
+            fidList = list()
+            #AddMsgAndPrint(" \nSaved FIDSet: '" + str(fids) + "'")
 
-            if len(fidList1) > 0:
-                #AddMsgAndPrint(" \nFound " + str(len(fidList1)) + " fids  in list '" + str(fidList1) + "'", 0)
-                for fid in fidList1:
-                    fidList.append(int(fid))
+            if fids != None:
+                # save list of feature ids in original selection
+                fidList1 = list(fids.split("; "))
 
-                del fidList1
+                if len(fidList1) > 0:
+                    #AddMsgAndPrint(" \nFound " + str(len(fidList1)) + " fids  in list '" + str(fidList1) + "'")
+                    for fid in fidList1:
+                        fidList.append(int(fid))
 
-        layerName = desc.nameString
+                    del fidList1
 
-        # get count of number of features being processed
-        if len(fidList) == 0:
-            # No selected features in layer
-            iSelection = iTotalFeatures
+            layerName = desc['nameString']
 
-            if defQuery == "":
-                # No query definition and no selection
+            # get count of number of features being processed
+            if len(fidList) == 0:
+                # No selected features in layer
                 iSelection = iTotalFeatures
-                AddMsgAndPrint(" \nProcessing all " + Number_Format(iTotalFeatures, 0, True) + " polygons in '" + layerName + "'...")
+
+                if defQuery == "":
+                    # No query definition and no selection
+                    iSelection = iTotalFeatures
+                    AddMsgAndPrint(" \nProcessing all " + Number_Format(iTotalFeatures, 0, True) + " polygons in '" + layerName + "'...")
+
+                else:
+                    # There is a query definition, so the only option is to use GetCount
+                    iSelection = int(arcpy.GetCount_management(inLayer).getOutput(0))  # Use selected features code
+                    AddMsgAndPrint("\nSearching " + Number_Format(iSelection, 0, True) + " of " + Number_Format(iTotalFeatures, 0, True) + " features...")
 
             else:
-                # There is a query definition, so the only option is to use GetCount
-                iSelection = int(arcpy.GetCount_management(inLayer).getOutput(0))  # Use selected features code
-                AddMsgAndPrint("\nSearching " + Number_Format(iSelection, 0, True) + " of " + Number_Format(iTotalFeatures, 0, True) + " features...")
+                # featurelayer has a selected set, get count using FIDSet
+                iSelection = len(fidList)
+                AddMsgAndPrint(" \nProcessing " + Number_Format(iSelection, 0, True) + " of " + Number_Format(iTotalFeatures, 0, True) + " features...")
+
+        elif theDataType in ("FEATURECLASS", "SHAPEFILE"):
+            # input layer is a featureclass, get featureclass specific information
+            layerName = desc['baseName'] + " Layer"
+            defQuery = ""
+            fids = ""
+            fidList = list()
+
+            iSelection = iTotalFeatures
+            AddMsgAndPrint(" \nProcessing all " + Number_Format(iTotalFeatures, 0, True) + " polygons in '" + layerName + "'...")
+
+
+            # still need to create a featurelayer if the user wants to summarize on the basis of some attribute value
+            AddMsgAndPrint(" \nCreating featurelayer '" + layerName + "' from featureclass: '" + theCatalogPath + "'")
+            arcpy.MakeFeatureLayer_management(theCatalogPath, layerName)
+            inLayer = layerName
+
+        # Make sure that input and output datums are the same, no transformations allowed
+        if outputSR.name == '':
+            outputSR = inputSR
+            outputDatum = inputDatum
+            #AddMsgAndPrint(" \nSetting output CS to same as input: " + outputSR.name + " \n" + outputDatum + " \n ", 1)
 
         else:
-            # featurelayer has a selected set, get count using FIDSet
-            iSelection = len(fidList)
-            AddMsgAndPrint(" \nProcessing " + Number_Format(iSelection, 0, True) + " of " + Number_Format(iTotalFeatures, 0, True) + " features...")
+            outputDatum = outputSR.GCS.datumName
+            #AddMsgAndPrint(" \nOutput datum: '" + outputDatum + "'")
 
-    elif theDataType in ("FEATURECLASS", "SHAPEFILE"):
-        # input layer is a featureclass, get featureclass specific information
-        layerName = desc.baseName + " Layer"
-        defQuery = ""
-        fids = ""
-        fidList = list()
+        if inputDatum != outputDatum:
+            AddMsgAndPrint("Input and output datums do not match",2)
 
-        iSelection = iTotalFeatures
-        AddMsgAndPrint(" \nProcessing all " + Number_Format(iTotalFeatures, 0, True) + " polygons in '" + layerName + "'...")
-
-
-        # still need to create a featurelayer if the user wants to summarize on the basis of some attribute value
-        AddMsgAndPrint(" \nCreating featurelayer '" + layerName + "' from featureclass: '" + theCatalogPath + "'")
-        arcpy.MakeFeatureLayer_management(theCatalogPath, layerName)
-        inLayer = layerName
-
-    # Make sure that input and output datums are the same, no transformations allowed
-    if outputSR.name == '':
-        outputSR = inputSR
-        outputDatum = inputDatum
-        #AddMsgAndPrint(" \nSetting output CS to same as input: " + outputSR.name + " \n" + outputDatum + " \n ", 1)
-
-    else:
-        outputDatum = outputSR.GCS.datumName
-        #AddMsgAndPrint(" \nOutput datum: '" + outputDatum + "'")
-
-    if inputDatum != outputDatum:
-        AddMsgAndPrint("Input and output datums do not match",2)
-
-    if outputSR.type.upper() != "PROJECTED":
-        if inputDatum in ("D_North_American_1983","D_WGS_1984"):
-            # use Web Mercatur as output projection for calculating segment length
-            AddMsgAndPrint(" \nInput layer coordinate system is not projected, switching to Web Mercatur (meters)", 1)
-            outputSR = CreateWebMercaturSR()
-
-        else:
-            AddMsgAndPrint("Unable to handle output coordinate system: " + outputSR.name + " \n" + outputDatum,2)
-
-    else:
-        AddMsgAndPrint("\nOutput coordinate system: " + outputSR.name)
-
-    theUnits = outputSR.linearUnitName.lower()
-    theUnits = theUnits.replace("foot", "feet")
-    theUnits = theUnits.replace("meter", "meters")
-
-    if theUnits.startswith("meter"):
-        unitAbbrev = "m"
-    else:
-        unitAbbrev = "ft"
-
-    if inFieldName == "":
-        bProcessed = ProcessLayer(inLayer, fidFld, outputSR)
-    else:
-        bProcessed = ProcessLayerBySum(inLayer, inField, outputSR)
-
-    # if there was a previous selection on the input layer, reapply
-    if theDataType == "FEATURELAYER":
-        if len(fidList) > 0:
-            if len(fidList) == 1:
-                fidList ="(" + str(fidList[0]) + ")"
+        if outputSR.type.upper() != "PROJECTED":
+            if inputDatum in ("D_North_American_1983","D_WGS_1984"):
+                # use Web Mercatur as output projection for calculating segment length
+                AddMsgAndPrint(" \nInput layer coordinate system is not projected, switching to Web Mercatur (meters)", 1)
+                outputSR = CreateWebMercaturSR()
 
             else:
-                fidList = str(tuple(fidList))
-
-            sql = arcpy.AddFieldDelimiters(inLayer, fidFld) + " in " + fidList
-            arcpy.SelectLayerByAttribute_management(inLayer, "NEW_SELECTION", sql)
+                AddMsgAndPrint("Unable to handle output coordinate system: " + outputSR.name + " \n" + outputDatum,2)
 
         else:
-            arcpy.SelectLayerByAttribute_management(inLayer, "CLEAR_SELECTION")
+            AddMsgAndPrint("\nOutput coordinate system: " + outputSR.name)
 
-    if bProcessed:
+        theUnits = outputSR.linearUnitName.lower()
+        theUnits = theUnits.replace("foot", "feet")
+        theUnits = theUnits.replace("meter", "meters")
+
+        if theUnits.startswith("meter"):
+            unitAbbrev = "m"
+        else:
+            unitAbbrev = "ft"
+
         if inFieldName == "":
-            AddMsgAndPrint("\nProcessing complete \n ")
-
+            bProcessed = ProcessLayer(inLayer, fidFld, outputSR)
         else:
-            AddMsgAndPrint("\nProcessing complete, join table to the appropriate spatial layer on " + inFieldName + " to create a status map \n ")
+            bProcessed = ProcessLayerBySum(inLayer, inField, outputSR)
 
-except:
-    errorMsg()
+        # if there was a previous selection on the input layer, reapply
+        if theDataType == "FEATURELAYER":
+            if len(fidList) > 0:
+                if len(fidList) == 1:
+                    fidList ="(" + str(fidList[0]) + ")"
+
+                else:
+                    fidList = str(tuple(fidList))
+
+                sql = arcpy.AddFieldDelimiters(inLayer, fidFld) + " in " + fidList
+                arcpy.SelectLayerByAttribute_management(inLayer, "NEW_SELECTION", sql)
+
+            else:
+                arcpy.SelectLayerByAttribute_management(inLayer, "CLEAR_SELECTION")
+
+        if bProcessed:
+            if inFieldName == "":
+                AddMsgAndPrint("\nProcessing complete \n ")
+
+            else:
+                AddMsgAndPrint("\nProcessing complete, join table to the appropriate spatial layer on " + inFieldName + " to create a status map \n ")
+
+    except:
+        errorMsg()
