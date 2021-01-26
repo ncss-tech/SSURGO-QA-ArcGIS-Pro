@@ -23,131 +23,223 @@
 #
 # 10-31-2013
 
-class MyError(Exception):
-    pass
 
-## ===================================================================================
-def PrintMsg(msg, severity=0):
+# ===============================================================================================================
+def AddMsgAndPrint(msg, severity=0):
+    # prints message to screen if run as a python script
     # Adds tool message to the geoprocessor
     #
     #Split the message on \n first, so that if it's multiple lines, a GPMessage will be added for each line
     try:
-        for string in msg.split('\n'):
+
+        print(msg)
+        #for string in msg.split('\n'):
             #Add a geoprocessing message (in case this is run as a tool)
-            if severity == 0:
-                arcpy.AddMessage(string)
+        if severity == 0:
+            arcpy.AddMessage(msg)
 
-            elif severity == 1:
-                arcpy.AddWarning(string)
+        elif severity == 1:
+            arcpy.AddWarning(msg)
 
-            elif severity == 2:
-                arcpy.AddMessage("    ")
-                arcpy.AddError(string)
+        elif severity == 2:
+            arcpy.AddError("\n" + msg)
 
     except:
         pass
 
-## ===================================================================================
+# ================================================================================================================
 def errorMsg():
     try:
-        tb = sys.exc_info()[2]
-        tbinfo = traceback.format_tb(tb)[0]
-        theMsg = tbinfo + "\n" + str(sys.exc_type)+ ": " + str(sys.exc_value)
-        PrintMsg(theMsg, 2)
+
+        exc_type, exc_value, exc_traceback = sys.exc_info()
+        theMsg = "\t" + traceback.format_exception(exc_type, exc_value, exc_traceback)[1] + "\n\t" + traceback.format_exception(exc_type, exc_value, exc_traceback)[-1]
+
+        if theMsg.find("exit") > -1:
+            AddMsgAndPrint("\n\n")
+            pass
+        else:
+            AddMsgAndPrint(theMsg,2)
 
     except:
-        PrintMsg("Unhandled error in errorMsg method", 2)
+        AddMsgAndPrint("Unhandled error in unHandledException method", 2)
         pass
 
-## ===================================================================================
+# ===============================================================================================================
 def setScratchWorkspace():
-    # This function will set the scratchGDB environment based on the scratchWorkspace environment.
-    #
-    # The scratch workspac will typically not be defined by the user but the scratchGDB will
-    # always be defined.  The default location for the scratchGDB is at C:\Users\<user>\AppData\Local\Temp
-    # on Windows 7 or C:\Documents and Settings\<user>\Localsystem\Temp on Windows XP.  Inside this
-    # directory, scratch.gdb will be created.
-    #
-    # If scratchWorkspace is set to something other than a GDB or Folder than the scratchWorkspace
-    # will be set to C:\temp.  If C:\temp doesn't exist than the ESRI scratchWorkspace locations will be used.
-    #
-    # If scratchWorkspace is an SDE GDB than the scratchWorkspace will be set to C:\temp.  If
-    # C:\temp doesn't exist than the ESRI scratchWorkspace locations will be used.
+    """ This function will set the scratchWorkspace for the interim of the execution
+        of this tool.  The scratchWorkspace is used to set the scratchGDB which is
+        where all of the temporary files will be written to.  The path of the user-defined
+        scratchWorkspace will be compared to existing paths from the user's system
+        variables.  If there is any overlap in directories the scratchWorkspace will
+        be set to C:\TEMP, assuming C:\ is the system drive.  If all else fails then
+        the packageWorkspace Environment will be set as the scratchWorkspace. This
+        function returns the scratchGDB environment which is set upon setting the scratchWorkspace"""
+
+##        This is a printout of my system environmmental variables - Windows 10
+##        -----------------------------------------------------------------------------------------
+##        ESRI_OS_DATADIR_LOCAL_DONOTUSE-- C:\Users\Adolfo.Diaz\AppData\Local\
+##        ESRI_OS_DIR_DONOTUSE-- C:\Users\ADOLFO~1.DIA\AppData\Local\Temp\ArcGISProTemp22096\
+##        ESRI_OS_DATADIR_ROAMING_DONOTUSE-- C:\Users\Adolfo.Diaz\AppData\Roaming\
+##        TEMP-- C:\Users\ADOLFO~1.DIA\AppData\Local\Temp\ArcGISProTemp22096\
+##        LOCALAPPDATA-- C:\Users\Adolfo.Diaz\AppData\Local
+##        PROGRAMW6432-- C:\Program Files
+##        COMMONPROGRAMFILES-- C:\Program Files\Common Files
+##        APPDATA-- C:\Users\Adolfo.Diaz\AppData\Roaming
+##        USERPROFILE-- C:\Users\Adolfo.Diaz
+##        PUBLIC-- C:\Users\Public
+##        SYSTEMROOT-- C:\windows
+##        PROGRAMFILES-- C:\Program Files
+##        COMMONPROGRAMFILES(X86)-- C:\Program Files (x86)\Common Files
+##        ALLUSERSPROFILE-- C:\ProgramData
+##        HOMEPATH-- \
+##        HOMESHARE-- \\usda.net\NRCS\home\WIMA2\NRCS\Adolfo.Diaz
+##        ONEDRIVE-- C:\Users\Adolfo.Diaz\OneDrive - USDA
+##        ARCHOME-- c:\program files\arcgis\pro\
+##        ARCHOME_USER-- c:\program files\arcgis\pro\
+##        ------------------------------------------------------------------------------------------
 
     try:
+
+        def setTempFolderAsWorkspace(sysDriveLetter):
+            tempFolder = sysDrive + os.sep + "TEMP"
+
+            if not os.path.exists(tempFolder):
+                os.makedirs(tempFolder,mode=777)
+
+            arcpy.env.scratchWorkspace = tempFolder
+            AddMsgAndPrint("\tTemporarily setting scratch workspace to: " + arcpy.env.scratchGDB,1)
+            return arcpy.env.scratchGDB
+
+
+        AddMsgAndPrint("\nSetting Scratch Workspace")
+        scratchWK = arcpy.env.scratchWorkspace
+
         # -----------------------------------------------
         # Scratch Workspace is defined by user or default is set
-        if arcpy.env.scratchWorkspace is not None:
+        if scratchWK is not None:
 
-            # describe scratch workspace
-            scratchWK = arcpy.env.scratchWorkspace
-            descSW = arcpy.Describe(scratchWK)
-            descDT = descSW.dataType.upper()
+            # dictionary of system environmental variables
+            envVariables = os.environ
 
-            # scratch workspace is geodatabase
-            if descDT == "WORKSPACE":
-                progID = descSW.workspaceFactoryProgID
-
-                # scratch workspace is a FGDB
-                if  progID == "esriDataSourcesGDB.FileGDBWorkspaceFactory.1":
-                    arcpy.env.scratchWorkspace = os.path.dirname(scratchWK)
-                    arcpy.env.scratchWorkspace = arcpy.env.scratchGDB
-
-                # scratch workspace is a Personal GDB -- set scratchWS to folder of .mdb
-                elif progID == "esriDataSourcesGDB.AccessWorkspaceFactory.1":
-                    arcpy.env.scratchWorkspace = os.path.dirname(scratchWK)
-                    arcpy.env.scratchWorkspace = arcpy.env.scratchGDB
-
-                # scratch workspace is an SDE GDB.
-                elif progID == "esriDataSourcesGDB.SdeWorkspaceFactory.1":
-
-                    # set scratch workspace to C:\Temp; avoid the server
-                    if os.path.exists(r'C:\Temp'):
-
-                        arcpy.env.scratchWorkspace = r'C:\Temp'
-                        arcpy.env.scratchWorkspace = arcpy.env.scratchGDB
-
-                    # set scratch workspace to default ESRI location
-                    else:
-                        arcpy.env.scratchWorkspace = arcpy.env.scratchFolder
-                        arcpy.env.scratchWorkspace = arcpy.env.scratchGDB
-
-            # scratch workspace is simply a folder
-            elif descDT == "FOLDER":
-                arcpy.env.scratchWorkspace = scratchWK
-                arcpy.env.scratchWorkspace = arcpy.env.scratchGDB
-
-            # scratch workspace is set to something other than a GDB or folder; set to C:\Temp
+            # get the root system drive i.e C:
+            if 'SYSTEMDRIVE' in envVariables:
+                sysDrive = envVariables['SYSTEMDRIVE']
             else:
-                # set scratch workspace to C:\Temp
-                if os.path.exists(r'C:\Temp'):
+                sysDrive = None
 
-                    arcpy.env.scratchWorkspace = r'C:\Temp'
-                    arcpy.env.scratchWorkspace = arcpy.env.scratchGDB
+            varsToSearch = ['HOMEDRIVE','HOMEPATH','HOMESHARE','ONEDRIVE','ARCHOME','ARCHOME_USER',
+                            'ESRI_OS_DATADIR_LOCAL_DONOTUSE','ESRI_OS_DIR_DONOTUSE','ESRI_OS_DATADIR_MYDOCUMENTS_DONOTUSE',
+                            'ESRI_OS_DATADIR_ROAMING_DONOTUSE','TEMP','LOCALAPPDATA','PROGRAMW6432','COMMONPROGRAMFILES','APPDATA',
+                            'USERPROFILE','PUBLIC','SYSTEMROOT','PROGRAMFILES','COMMONPROGRAMFILES(X86)','ALLUSERSPROFILE']
 
-                # set scratch workspace to default ESRI location
+            bSetTempWorkSpace = False
+
+            """ Iterate through each Environmental variable; If the variable is within the 'varsToSearch' list
+                above then check their value against the user-set scratch workspace.  If they have anything
+                in common then switch the workspace to something local  """
+            for var in envVariables:
+
+                if not var in varsToSearch:
+                    continue
+
+                # make a list from the scratch and environmental paths
+                varValueList = (envVariables[var].lower()).split(os.sep)          # ['C:', 'Users', 'adolfo.diaz', 'AppData', 'Local']
+                scratchWSList = (scratchWK.lower()).split(os.sep)                 # [u'C:', u'Users', u'adolfo.diaz', u'Documents', u'ArcGIS', u'Default.gdb', u'']
+
+                # remove any blanks items from lists
+                varValueList = [val for val in varValueList if not val == '']
+                scratchWSList = [val for val in scratchWSList if not val == '']
+
+                # Make sure env variables were populated
+                if len(varValueList)>0 and len(scratchWSList)>0:
+
+                    # Home drive is being used as scrathcworkspace
+                    if scratchWSList[0].lower() == envVariables['HOMEDRIVE'].lower():
+                        bSetTempWorkSpace = True
+
+                    # First element is the drive letter; remove it if they are they same.
+                    if varValueList[0] == scratchWSList[0]:
+                        varValueList.remove(varValueList[0])
+                        scratchWSList.remove(scratchWSList[0])
+                    else:
+                        continue
+
+                # Compare the values of 2 lists; order is significant
+                common = [i for i, j in zip(varValueList, scratchWSList) if i == j]
+
+                # There is commonality between the scrathWS and some env variable
+                # Proceed with creating a temp path.
+                if len(common) > 0:
+                    bSetTempWorkSpace = True
+                    break
+
+            # The current scratch workspace shares 1 or more directory paths with the
+            # system env variables.  Create a temp folder at root
+            if bSetTempWorkSpace:
+                AddMsgAndPrint("\tCurrent Workspace: " + scratchWK)
+
+                if sysDrive:
+                    return setTempFolderAsWorkspace(sysDrive)
+
+                # This should never be the case.  Every computer should have a system drive (C:\)
+                # packageWorkspace is set to "IN_MEMORY"
                 else:
-                    arcpy.env.scratchWorkspace = arcpy.env.scratchFolder
-                    arcpy.env.scratchWorkspace = arcpy.env.scratchGDB
+                    packageWS = [f for f in arcpy.ListEnvironments() if f=='packageWorkspace']
+                    if arcpy.env[packageWS[0]]:
+                        arcpy.env.scratchWorkspace = arcpy.env[packageWS[0]]
+                        AddMsgAndPrint("\tTemporarily setting scratch workspace to: " + arcpy.env.scratchGDB,1)
+                    else:
+                        AddMsgAndPrint("\tCould not set any scratch workspace",2)
+                        return False
 
-        # -----------------------------------------------
-        # Scratch Workspace is not defined. Attempt to set scratch to C:\temp
-        elif os.path.exists(r'C:\Temp'):
+            # user-set workspace does not violate system paths; Check for read/write
+            # permissions; if write permissions are denied then set workspace to TEMP folder
+            else:
+                arcpy.env.scratchWorkspace = scratchWK
+                arcpy.env.scratchGDB
 
-            arcpy.env.scratchWorkspace = r'C:\Temp'
-            arcpy.env.scratchWorkspace = arcpy.env.scratchGDB
+                if arcpy.env.scratchGDB == None:
+                    AddMsgAndPrint("\tCurrent scratch workspace: " + scratchWK + " is READ only!")
 
-        # set scratch workspace to default ESRI location
+                    if sysDrive:
+                        return setTempFolderAsWorkspace(sysDrive)
+
+                    else:
+                        packageWS = [f for f in arcpy.ListEnvironments() if f=='packageWorkspace']
+                        if arcpy.env[packageWS[0]]:
+                            arcpy.env.scratchWorkspace = arcpy.env[packageWS[0]]
+                            AddMsgAndPrint("\tTemporarily setting scratch workspace to: " + arcpy.env.scratchGDB,1)
+                            return arcpy.env.scratchGDB
+
+                        else:
+                            AddMsgAndPrint("\tCould not set any scratch workspace",2)
+                            return False
+
+                else:
+                    AddMsgAndPrint("\tUser-defined scratch workspace is set to: "  + arcpy.env.scratchGDB)
+                    return arcpy.env.scratchGDB
+
+        # No workspace set (Very odd that it would go in here unless running directly from python)
         else:
+            AddMsgAndPrint("\tNo user-defined scratch workspace ")
+            sysDrive = os.environ['SYSTEMDRIVE']
 
-            arcpy.env.scratchWorkspace = arcpy.env.scratchFolder
-            arcpy.env.scratchWorkspace = arcpy.env.scratchGDB
+            if sysDrive:
+                return setTempFolderAsWorkspace(sysDrive)
 
-        return True
+            else:
+                packageWS = [f for f in arcpy.ListEnvironments() if f=='packageWorkspace']
+                if arcpy.env[packageWS[0]]:
+                    arcpy.env.scratchWorkspace = arcpy.env[packageWS[0]]
+                    AddMsgAndPrint("\tTemporarily setting scratch workspace to: " + arcpy.env.scratchGDB,1)
+                    return arcpy.env.scratchGDB
+
+                else:
+                    AddMsgAndPrint("\tCould not set scratchWorkspace. Not even to default!",2)
+                    return False
 
     except:
         errorMsg()
-        return False
 
 ## ===================================================================================
 def CreateWebMercaturSR():
@@ -215,10 +307,10 @@ def ProcessLayer(inLayer, inField, outputSR):
         for i in range(6):
             newHdr = newHdr + (" " * (formatList[i] - len(hdrList[i])) + hdrList[i])
 
-        PrintMsg(" \n" + newHdr, 0)
-        PrintMsg(dashedLine, 0)
+        AddMsgAndPrint(" \n" + newHdr, 0)
+        AddMsgAndPrint(dashedLine, 0)
 
-        #PrintMsg(" \nSummarizing polygon statistics for " + inField.name + " value: '" + val + "'", 1)
+        #AddMsgAndPrint(" \nSummarizing polygon statistics for " + inField.name + " value: '" + val + "'", 1)
         # initialize variables for the current value (eg. NE109)
         iSeg = 1000000  # use an arbitrarily high segment length to initialize segment length
         polygonCnt = 0
@@ -247,7 +339,7 @@ def ProcessLayer(inLayer, inField, outputSR):
 
                     elif iPartCnt == 0:
                         # bad polygon
-                        raise MyError, "Bad geometry for polygon #" + str(fid)
+                        AddMsgAndPrint("Bad geometry for polygon #" + str(fid),2)
 
                     sumArea += theArea
                     sumPerimeter += thePerimeter
@@ -275,11 +367,11 @@ def ProcessLayer(inLayer, inField, outputSR):
 
                             else:
                                 # interior ring encountered
-                                #PrintMsg("\t\t\tInterior Ring...", 0)
+                                #AddMsgAndPrint("\t\t\tInterior Ring...", 0)
                                 pntList = []  # reset points list for interior ring
 
                 else:
-                    raise MyError, "NULL geometry for polygon #" + str(fid)
+                    AddMsgAndPrint("NULL geometry for polygon #" + str(fid),2)
 
                 # convert mapunit area to acres
                 if theUnits == "meters":
@@ -289,7 +381,7 @@ def ProcessLayer(inLayer, inField, outputSR):
                     sumAcres = sumArea / 43560.0
 
                 else:
-                    PrintMsg(" \nFailed to calculate acre value using unit: " + theUnits, 2)
+                    AddMsgAndPrint(" \nFailed to calculate acre value using unit: " + theUnits, 2)
                     return False
 
                 # calculate average vertex interval for this polygon
@@ -340,21 +432,16 @@ def ProcessLayer(inLayer, inField, outputSR):
         for i in range(6):
             newTotal = newTotal + (" " * (formatList[i] - len(totalMsg[i])) + totalMsg[i])
 
-        PrintMsg(newTotal, 0)
+        AddMsgAndPrint(newTotal, 0)
 
         if bHasMultiPart:
-            PrintMsg("Input layer has multipart polygons that require editing (explode)", 2)
+            AddMsgAndPrint("Input layer has multipart polygons that require editing (explode)", 2)
 
         # Add QA_VertexReport table to ArcMap TOC
-        PrintMsg(" \nPolygon statistics saved to " + statsTbl, 0)
+        AddMsgAndPrint(" \nPolygon statistics saved to " + statsTbl, 0)
         arcpy.SetParameter(3, statsTbl)
 
         return True
-
-    except MyError, e:
-        # Example: raise MyError, "This is an error message"
-        PrintMsg(str(e) + " \n", 2)
-        return False
 
     except:
         errorMsg()
@@ -363,9 +450,9 @@ def ProcessLayer(inLayer, inField, outputSR):
 ## ===================================================================================
 def ProcessLayerBySum(inLayer, inField, outputSR):
     # All the real work is performed within this function
-    #
     # inLayer = selected featurelayer or featureclass that will be processed
     # if it is a featureclass, then a featurelayer must be substituted to allow  a selection
+
     try:
         # Create table to store geometry statistics for each polygon
         # Later this table will be joined to the input layer on POLYID
@@ -394,8 +481,9 @@ def ProcessLayerBySum(inLayer, inField, outputSR):
         del valList
 
         if len(uniqueList) > 0:
+
             # only proceed if list contains unique values to be processed
-            PrintMsg(" \nFound " + Number_Format(len(uniqueList), 0, True) + " unique values for " + inFieldName + " \n ", 0)
+            AddMsgAndPrint(" \nFound " + Number_Format(len(uniqueList), 0, True) + " unique values for " + inFieldName + " \n ", 0)
 
             # if the input is a featurelayer, need to see if there is a selection set or definition query that needs to be maintained
             #
@@ -421,8 +509,8 @@ def ProcessLayerBySum(inLayer, inField, outputSR):
             for i in range(7):
                 newHdr = newHdr + (" " * (formatList[i] - len(hdrList[i])) + hdrList[i])
 
-            PrintMsg(newHdr, 0)
-            PrintMsg(dashedLine, 0)
+            AddMsgAndPrint(newHdr, 0)
+            AddMsgAndPrint(dashedLine, 0)
 
             for val in uniqueList:
                 arcpy.SetProgressorLabel("Reading polygon geometry for " + inField.name + " value:  " + str(val)  + "...")
@@ -442,7 +530,7 @@ def ProcessLayerBySum(inLayer, inField, outputSR):
                     # if some values aren't populated, insert string 'NULL' into report table
                     val = "<NULL>"
 
-                #PrintMsg(" \nSummarizing polygon statistics for " + inField.name + " value: '" + val + "'", 1)
+                #AddMsgAndPrint(" \nSummarizing polygon statistics for " + inField.name + " value: '" + val + "'", 1)
                 # initialize variables for the current value (eg. NE109)
                 iSeg = 1000000  # use an arbitrarily high segment length to initialize segment length
                 polygonCnt = 0
@@ -468,7 +556,7 @@ def ProcessLayerBySum(inLayer, inField, outputSR):
                                 bHasMultiPart = True
 
                             elif feat.partCount == 0:
-                                raise MyError, "Bad geometry for polygon #" + str(fid)
+                                AddMsgAndPrint("Bad geometry for polygon #" + str(fid),2)
 
                             iPnts = feat.pointCount
 
@@ -502,13 +590,13 @@ def ProcessLayerBySum(inLayer, inField, outputSR):
 
                                     else:
                                         # interior ring encountered
-                                        #PrintMsg("\t\t\tInterior Ring...", 0)
+                                        #AddMsgAndPrint("\t\t\tInterior Ring...", 0)
                                         pntList = []  # reset points list for interior ring
 
                             arcpy.SetProgressorPosition()
 
                         else:
-                            raise MyError, "Null geometry for polygon #" + str(fid)
+                            AddMsgAndPrint("Null geometry for polygon #" + str(fid),2)
 
                     # convert mapunit area to acres
                     if theUnits == "meters":
@@ -518,7 +606,7 @@ def ProcessLayerBySum(inLayer, inField, outputSR):
                         sumAcres = sumArea / 43560.0
 
                     else:
-                        PrintMsg(" \nFailed to calculate acre value using unit: " + theUnits, 2)
+                        AddMsgAndPrint(" \nFailed to calculate acre value using unit: " + theUnits, 2)
                         return False
 
                     # calculate average vertex interval for this polygon
@@ -554,12 +642,12 @@ def ProcessLayerBySum(inLayer, inField, outputSR):
                 for i in range(7):
                     newMsg = newMsg + (" " * (formatList[i] - len(statsMsg[i])) + statsMsg[i])
 
-                PrintMsg(newMsg, 0)
+                AddMsgAndPrint(newMsg, 0)
 
                 #arcpy.SetProgressorPosition()
 
         else:
-            PrintMsg(" \nFailed to create list of unique " + inFieldName + " values", 2)
+            AddMsgAndPrint(" \nFailed to create list of unique " + inFieldName + " values", 2)
             return False
 
         arcpy.ResetProgressor()
@@ -588,26 +676,21 @@ def ProcessLayerBySum(inLayer, inField, outputSR):
         for i in range(6):
             newTotal = newTotal + (" " * (formatList[i] - len(totalMsg[i])) + totalMsg[i])
 
-        PrintMsg(dashedLine, 0)
-        PrintMsg(newTotal, 0)
+        AddMsgAndPrint(dashedLine, 0)
+        AddMsgAndPrint(newTotal, 0)
 
         if bHasMultiPart:
-            PrintMsg("Input layer has multipart polygons that require editing (explode)", 2)
+            AddMsgAndPrint("Input layer has multipart polygons that require editing (explode)", 2)
 
         if len(bigPolyList) > 0:
-            PrintMsg("Warning! Input layer has " + str(len(bigPolyList)) + " polygons exceeding the " + Number_Format(maxV) + " vertex limit: " + ", ".join(bigPolyList), 2)
+            AddMsgAndPrint("Warning! Input layer has " + str(len(bigPolyList)) + " polygons exceeding the " + Number_Format(maxV) + " vertex limit: " + ", ".join(bigPolyList), 2)
 
         # Add QA_VertexReport table to ArcMap TOC
-        PrintMsg(" \nPolygon statistics saved to " + statsTbl, 0)
+        AddMsgAndPrint(" \nPolygon statistics saved to " + statsTbl, 0)
         arcpy.SetParameter(3, statsTbl)
         arcpy.SelectLayerByAttribute_management(inLayer, "CLEAR_SELECTION")
 
         return True
-
-    except MyError, e:
-        # Example: raise MyError, "This is an error message"
-        PrintMsg(str(e) + " \n", 2)
-        return False
 
     except:
         errorMsg()
@@ -642,7 +725,7 @@ def MakeStatsTable(inField, unitAbbrev):
                 arcpy.Delete_management(statsTbl)
 
             arcpy.CreateTable_management(os.path.dirname(statsTbl), os.path.basename(statsTbl))
-            #PrintMsg("Created polygon stats table (" + statsTbl + ")", 1)
+            #AddMsgAndPrint("Created polygon stats table (" + statsTbl + ")", 1)
 
         except:
             errorMsg()
@@ -671,7 +754,7 @@ def MakeStatsTable(inField, unitAbbrev):
                 allFields = arcpy.ListFields(statsTbl)
 
                 for badField in allFields:
-                    #PrintMsg("\tBadFields: " + badField.name, 0)
+                    #AddMsgAndPrint("\tBadFields: " + badField.name, 0)
                     if badField.name.upper() == "FIELD1":
                         arcpy.DeleteField_management(statsTbl, "Field1")
 
@@ -702,7 +785,19 @@ def Number_Format(num, places=0, bCommas=True):
 
     except:
         errorMsg()
-        return FalseoutputPoin
+        return num
+
+# ===================================================================================
+def splitThousands(someNumber):
+    """will determine where to put a thousands seperator if one is needed. Input is
+       an integer.  Integer with or without thousands seperator is returned."""
+
+    try:
+        return re.sub(r'(\d{3})(?=\d)', r'\1,', str(someNumber)[::-1])[::-1]
+
+    except:
+        errorMsg()
+        return someNumber
 
 ## ===================================================================================
 def elapsedTime(start):
@@ -795,7 +890,8 @@ try:
 
     eMsg = elapsedTime(begin)
 
-    env.overwriteOutput = True
+    arcpy.env.parallelProcessingFactor = "75%"
+    arcpy.env.overwriteOutput = True
 
     # reset field parameter to a field object so that the properties can be determined
     if inFieldName != "":
@@ -807,7 +903,6 @@ try:
                 inField = fld
 
     # Setup: Get all required information from input layer
-    #
     # Describe input layer
     desc = arcpy.Describe(inLayer)
     theDataType = desc.dataType.upper()
@@ -824,7 +919,7 @@ try:
     else:
         env.workspace = os.path.dirname(theCatalogPath)
 
-    PrintMsg(" \nOutput workspace set to: " + env.workspace, 0)
+    AddMsgAndPrint("\nOutput workspace set to: " + env.workspace)
 
     # Get total number of features for the input featureclass
     iTotalFeatures = int(arcpy.GetCount_management(theCatalogPath).getOutput(0))
@@ -835,14 +930,14 @@ try:
         defQuery = desc.whereClause
         fids = desc.FIDSet
         fidList = list()
-        #PrintMsg(" \nSaved FIDSet: '" + str(fids) + "'", 0)
+        #AddMsgAndPrint(" \nSaved FIDSet: '" + str(fids) + "'", 0)
 
         if fids != "":
             # save list of feature ids in original selection
             fidList1 = list(fids.split("; "))
 
             if len(fidList1) > 0:
-                #PrintMsg(" \nFound " + str(len(fidList1)) + " fids  in list '" + str(fidList1) + "'", 0)
+                #AddMsgAndPrint(" \nFound " + str(len(fidList1)) + " fids  in list '" + str(fidList1) + "'", 0)
                 for fid in fidList1:
                     fidList.append(int(fid))
 
@@ -858,17 +953,17 @@ try:
             if defQuery == "":
                 # No query definition and no selection
                 iSelection = iTotalFeatures
-                PrintMsg(" \nProcessing all " + Number_Format(iTotalFeatures, 0, True) + " polygons in '" + layerName + "'...", 0)
+                AddMsgAndPrint(" \nProcessing all " + Number_Format(iTotalFeatures, 0, True) + " polygons in '" + layerName + "'...")
 
             else:
                 # There is a query definition, so the only option is to use GetCount
                 iSelection = int(arcpy.GetCount_management(inLayer).getOutput(0))  # Use selected features code
-                PrintMsg(" \nSearching " + Number_Format(iSelection, 0, True) + " of " + Number_Format(iTotalFeatures, 0, True) + " features...", 0)
+                AddMsgAndPrint("\nSearching " + Number_Format(iSelection, 0, True) + " of " + Number_Format(iTotalFeatures, 0, True) + " features...")
 
         else:
             # featurelayer has a selected set, get count using FIDSet
             iSelection = len(fidList)
-            PrintMsg(" \nProcessing " + Number_Format(iSelection, 0, True) + " of " + Number_Format(iTotalFeatures, 0, True) + " features...", 0)
+            AddMsgAndPrint(" \nProcessing " + Number_Format(iSelection, 0, True) + " of " + Number_Format(iTotalFeatures, 0, True) + " features...")
 
     elif theDataType in ("FEATURECLASS", "SHAPEFILE"):
         # input layer is a featureclass, get featureclass specific information
@@ -878,11 +973,11 @@ try:
         fidList = list()
 
         iSelection = iTotalFeatures
-        PrintMsg(" \nProcessing all " + Number_Format(iTotalFeatures, 0, True) + " polygons in '" + layerName + "'...", 0)
+        AddMsgAndPrint(" \nProcessing all " + Number_Format(iTotalFeatures, 0, True) + " polygons in '" + layerName + "'...")
 
 
         # still need to create a featurelayer if the user wants to summarize on the basis of some attribute value
-        PrintMsg(" \nCreating featurelayer '" + layerName + "' from featureclass: '" + theCatalogPath + "'", 0)
+        AddMsgAndPrint(" \nCreating featurelayer '" + layerName + "' from featureclass: '" + theCatalogPath + "'")
         arcpy.MakeFeatureLayer_management(theCatalogPath, layerName)
         inLayer = layerName
 
@@ -890,26 +985,26 @@ try:
     if outputSR.name == '':
         outputSR = inputSR
         outputDatum = inputDatum
-        #PrintMsg(" \nSetting output CS to same as input: " + outputSR.name + " \n" + outputDatum + " \n ", 1)
+        #AddMsgAndPrint(" \nSetting output CS to same as input: " + outputSR.name + " \n" + outputDatum + " \n ", 1)
 
     else:
         outputDatum = outputSR.GCS.datumName
-        #PrintMsg(" \nOutput datum: '" + outputDatum + "'", 0)
+        #AddMsgAndPrint(" \nOutput datum: '" + outputDatum + "'")
 
     if inputDatum != outputDatum:
-        raise MyError, "Input and output datums do not match"
+        AddMsgAndPrint("Input and output datums do not match",2)
 
     if outputSR.type.upper() != "PROJECTED":
         if inputDatum in ("D_North_American_1983","D_WGS_1984"):
             # use Web Mercatur as output projection for calculating segment length
-            PrintMsg(" \nInput layer coordinate system is not projected, switching to Web Mercatur (meters)", 1)
+            AddMsgAndPrint(" \nInput layer coordinate system is not projected, switching to Web Mercatur (meters)", 1)
             outputSR = CreateWebMercaturSR()
 
         else:
-            raise MyError, "Unable to handle output coordinate system: " + outputSR.name + " \n" + outputDatum
+            AddMsgAndPrint("Unable to handle output coordinate system: " + outputSR.name + " \n" + outputDatum,2)
 
     else:
-        PrintMsg(" \nOutput coordinate system: " + outputSR.name, 0)
+        AddMsgAndPrint("\nOutput coordinate system: " + outputSR.name)
 
     theUnits = outputSR.linearUnitName.lower()
     theUnits = theUnits.replace("foot", "feet")
@@ -917,23 +1012,15 @@ try:
 
     if theUnits.startswith("meter"):
         unitAbbrev = "m"
-
     else:
         unitAbbrev = "ft"
 
-    # End of Setup
-    #
-
-    # run process
-
     if inFieldName == "":
         bProcessed = ProcessLayer(inLayer, fidFld, outputSR)
-
     else:
         bProcessed = ProcessLayerBySum(inLayer, inField, outputSR)
 
     # if there was a previous selection on the input layer, reapply
-    #
     if theDataType == "FEATURELAYER":
         if len(fidList) > 0:
             if len(fidList) == 1:
@@ -943,7 +1030,6 @@ try:
                 fidList = str(tuple(fidList))
 
             sql = arcpy.AddFieldDelimiters(inLayer, fidFld) + " in " + fidList
-            #PrintMsg(" \n " + sql, 0)
             arcpy.SelectLayerByAttribute_management(inLayer, "NEW_SELECTION", sql)
 
         else:
@@ -951,26 +1037,10 @@ try:
 
     if bProcessed:
         if inFieldName == "":
-            PrintMsg(" \nProcessing complete \n ", 0)
+            AddMsgAndPrint("\nProcessing complete \n ")
 
         else:
-            PrintMsg(" \nProcessing complete, join table to the appropriate spatial layer on " + inFieldName + " to create a status map \n ", 0)
-
-    try:
-        del inLayer
-
-    except NameError:
-        pass
-
-except MyError, e:
-    # Example: raise MyError, "This is an error message"
-    PrintMsg(str(e) + " \n", 2)
+            AddMsgAndPrint("\nProcessing complete, join table to the appropriate spatial layer on " + inFieldName + " to create a status map \n ")
 
 except:
     errorMsg()
-
-    try:
-        del inLayer
-
-    except NameError:
-        pass
