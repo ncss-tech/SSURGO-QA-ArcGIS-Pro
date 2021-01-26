@@ -277,7 +277,7 @@ def ProcessLayer(inLayer, outputSR, outLayer, minDist, iSelection):
 
             # create new featurelayer from vertex flag points
             layerPath = os.path.dirname(sys.argv[0])
-            layerFile = os.path.join(layerPath,"RedDot.lyr")
+            layerFile = os.path.join(layerPath,"RedDot.lyrx")
             outLayerName = "QA Vertex Flag Points (" + str(minDist) + " " + unitAbbrev + ")"
             arcpy.MakeFeatureLayer_management(outLayer, outLayerName)
             arcpy.env.addOutputsToMap = True
@@ -288,7 +288,7 @@ def ProcessLayer(inLayer, outputSR, outLayer, minDist, iSelection):
         else:
             # no problems found
             #arcpy.Delete_management(statsTbl)
-            AddMsgAndPrint(" \nNo short segments detected (less than " + Number_Format(minDist, 3, False) + " " + theUnits + ") \n ", 0)
+            AddMsgAndPrint("\nNo short segments detected (less than " + Number_Format(minDist, 3, False) + " " + theUnits + ") \n ", 0)
             pass
 
         return True
