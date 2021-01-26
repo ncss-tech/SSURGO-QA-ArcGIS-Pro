@@ -18,7 +18,7 @@ Quality Assurance|Find Common Points|X|
 Quality Assurance|Find Edge Matching Errors|X|
 Quality Assurance|Find Multipart Features|X|
 Quality Assurance|Find Slivers|X|
-Quality Assurance|Find Vertex Problems||
+Quality Assurance|Find Vertex Problems|X|
 Quality Assurance|Report Vertex Count||
 Quality Assurance|Report Vertex Density||
 Certification|Clip/Merge Adjacent Datasets||
