@@ -21,7 +21,6 @@ Quality Assurance|Find Slivers|X|
 Quality Assurance|Find Vertex Problems|X|
 Quality Assurance|Report Vertex Count|X|
 Quality Assurance|Report Vertex Density|X|
-Certification|Clip/Merge Adjacent Datasets||
 Certification|Export to SSURGO Shapefile||
 Certification|Generate Special Feature File||
 Certification|ZIP SSURGO Export Folders||
