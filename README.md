@@ -19,7 +19,7 @@ Quality Assurance|Find Edge Matching Errors|X|
 Quality Assurance|Find Multipart Features|X|
 Quality Assurance|Find Slivers|X|
 Quality Assurance|Find Vertex Problems|X|
-Quality Assurance|Report Vertex Count||
+Quality Assurance|Report Vertex Count|X|
 Quality Assurance|Report Vertex Density|X|
 Certification|Clip/Merge Adjacent Datasets||
 Certification|Export to SSURGO Shapefile||
