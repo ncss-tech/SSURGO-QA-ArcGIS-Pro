@@ -17,6 +17,17 @@
 #   CONUS - NAD_1983_To_WGS_1984_5
 #   Hawaii - NAD_1983_To_WGS_1984_3
 #   Alaska - NAD_1983_To_WGS_1984_5
+# ---------------------------------------------------------------------------
+# QA_ExportShapefiles.py
+# Created on: May 2013
+
+# Author: Adolfo.Diaz
+#         GIS Specialist
+#         National Soil Survey Center
+#         USDA - NRCS
+# e-mail: adolfo.diaz@usda.gov
+# phone: 608.662.4422 ext. 216
+#
 #   Puerto Rico and U.S. Virgin Islands - NAD_1983_To_WGS_1984_1
 #
 # 07-24-2013 Requires all 5 SSURGO featureclasses to be present in the input workspace for
