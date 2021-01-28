@@ -1,8 +1,15 @@
+# ---------------------------------------------------------------------------
 # QA_ExportShapefiles.py
+# Created on: May 2013
+
+# Author: Adolfo.Diaz
+#         GIS Specialist
+#         National Soil Survey Center
+#         USDA - NRCS
+# e-mail: adolfo.diaz@usda.gov
+# phone: 608.662.4422 ext. 216
 #
 # Purpose: Export a set of geodatabase featureclasses to SSURGO shapefiles
-#
-# Adolfo Diaz, USDA-NRCS Region 10 GIS Specialist
 #
 # Soil Data Mart database used the following datum transformation methods to
 # move the vector layers from NAD1983 to WGS1984 using ArcGIS 9.x?:
@@ -25,37 +32,18 @@
 # 11/13/2013
 # Modified to work with Regional Spatial Geodatabase
 # Requires all 6 SSURGO feature classes to be present within a Feature dataset.
-## ===================================================================================
-class MyError(Exception):
-    pass
 
-## ===================================================================================
-def errorMsg():
-    try:
-        tb = sys.exc_info()[2]
-        tbinfo = traceback.format_tb(tb)[0]
-        theMsg = tbinfo + "\n" + str(sys.exc_type)+ ": " + str(sys.exc_value) + "\n"
-        PrintMsg(theMsg, 2)
-
-    except:
-        PrintMsg("Unhandled error in errorMsg method", 2)
-        pass
-
-## ===================================================================================
-def PrintMsg(msg, severity=0):
+# ===============================================================================================================
+def AddMsgAndPrint(msg, severity=0):
+    # prints message to screen if run as a python script
     # Adds tool message to the geoprocessor
     #
     #Split the message on \n first, so that if it's multiple lines, a GPMessage will be added for each line
     try:
 
-        f = open(textFilePath,'a+')
-        f.write(msg + "\n")
-        f.close
-
-        del f
-
-    #for string in msg.split('\n'):
-        #Add a geoprocessing message (in case this is run as a tool)
+        print(msg)
+        #for string in msg.split('\n'):
+            #Add a geoprocessing message (in case this is run as a tool)
         if severity == 0:
             arcpy.AddMessage(msg)
 
@@ -63,9 +51,26 @@ def PrintMsg(msg, severity=0):
             arcpy.AddWarning(msg)
 
         elif severity == 2:
-            arcpy.AddError(msg)
+            arcpy.AddError("\n" + msg)
 
     except:
+        pass
+
+# ================================================================================================================
+def errorMsg():
+    try:
+
+        exc_type, exc_value, exc_traceback = sys.exc_info()
+        theMsg = "\t" + traceback.format_exception(exc_type, exc_value, exc_traceback)[1] + "\n\t" + traceback.format_exception(exc_type, exc_value, exc_traceback)[-1]
+
+        if theMsg.find("exit") > -1:
+            AddMsgAndPrint("\n\n")
+            pass
+        else:
+            AddMsgAndPrint(theMsg,2)
+
+    except:
+        AddMsgAndPrint("Unhandled error in unHandledException method", 2)
         pass
 
 ## ================================================================================================================
@@ -170,22 +175,22 @@ def GetExportLayers(inLoc):
         # list that contains valid SSURGO feature classes
         exportList = list()
 
-        desc = arcpy.Describe(inLoc)
+        desc = arcpy.da.Describe(inLoc)
         env.workspace = inLoc
 
         # ?????? I think we should force input workspace to be feature dataset!!!!
         # List all the feature classes if input is a feature dataset. Typical case
-        if desc.dataType.upper() == "FEATUREDATASET":
+        if desc['dataType'].upper() == "FEATUREDATASET":
 
             # set workspace environment to the geodatabase instead of FD
             env.workspace = os.path.dirname(inLoc)
-            listFC = arcpy.ListFeatureClasses("*","All",desc.baseName)
+            listFC = arcpy.ListFeatureClasses("*","All",desc['baseName'])
 
         # feature classes are independent ----  May want to get rid of this one!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
         else:
             listFC = arcpy.ListFeatureClasses("*")
 
-        PrintMsg("\nChecking input featureclasses for " + inLoc + " ("+ desc.dataType + ")", 1)
+        AddMsgAndPrint("\nChecking input featureclasses for " + inLoc + " ("+ desc['dataType'] + ")")
 
         # feature classes found in workspace
         if len(listFC) > 0:
@@ -223,16 +228,16 @@ def GetExportLayers(inLoc):
 
                 # SSURGO layer is missing
                 if int(iCnt) == 0:
-                    PrintMsg("\tMissing input featureclass for " + lyr, 2)
+                    AddMsgAndPrint("\tMissing input featureclass for " + lyr, 2)
                     missingList.append(lyr)
 
                 # There are duplicate SSURGO layers
                 elif int(iCnt) > 1:
-                    PrintMsg("\tInput workspace contains " + str(iCnt) + " possible duplicate featureclasses for '" + lyr + "'", 2)
+                    AddMsgAndPrint("\tInput workspace contains " + str(iCnt) + " possible duplicate featureclasses for '" + lyr + "'", 2)
                     return list()  # return blank list
 
             if len(missingList) > 0:
-                PrintMsg("\tMissing the following SSURGO data layers: "  + ",".join(missingList), 2)
+                AddMsgAndPrint("\tMissing the following SSURGO data layers: "  + ",".join(missingList), 2)
                 return list()  # return blank list
 
             else:
@@ -253,7 +258,7 @@ def GetExportLayers(inLoc):
             # No input featureclasses found in the selected workspace
             # This shouldn't happen if the tool validation code is working
 
-            PrintMsg("\n\tNo featureclasses found in " + inLoc, 2)
+            AddMsgAndPrint("\n\tNo featureclasses found in " + inLoc, 2)
             return list()
 
     except:
@@ -278,12 +283,12 @@ def GetFCType(fc, theAS):
         if fc[0:3] != "QA_":
 
             fcName = os.path.basename(fc)
-            theDescription = arcpy.Describe(fc)
-            featType = theDescription.shapeType
+            theDescription = arcpy.da.Describe(fc)
+            featType = theDescription['shapeType']
 
             # Look for AREASYMBOL field, must be present
             if not FindField(fc, "AREASYMBOL"):
-                PrintMsg("\t" + fcName + " is missing 'AREASYMBOL' field (GetFCName)", 2)
+                AddMsgAndPrint("\t" + fcName + " is missing 'AREASYMBOL' field (GetFCName)", 2)
                 return ssurgoType, fileName
 
          # Look for MUSYM field
@@ -353,12 +358,8 @@ def GetFCType(fc, theAS):
                 return ssurgoType, fileName
 
             else:
-                PrintMsg("\t" + fcName + " is an unidentified " + featType + " featureclass with no MUSYM or FEATSYM field (GetFCName)", 2)
+                AddMsgAndPrint("\t" + fcName + " is an unidentified " + featType + " featureclass with no MUSYM or FEATSYM field (GetFCName)", 2)
                 return ssurgoType, fileName
-
-    except MyError, e:
-        PrintMsg(str(e) + "\n", 2)
-        return "", ""
 
     except:
         errorMsg()
@@ -373,8 +374,8 @@ def FindField(fc, fldName):
     try:
 
         bFound = False
-        desc = arcpy.Describe(fc)
-        fldList = desc.fields
+        desc = arcpy.da.Describe(fc)
+        fldList = desc['fields']
 
         for fld in fldList:
 
@@ -426,10 +427,10 @@ def CheckAttributes(fc, ssurgoType):
 
             # Report any blank values
             if len(values) > 0:
-                PrintMsg("\tMissing " + str(len(values)) + " " + fldName + " value(s) in " + os.path.basename(fc) + " layer:",2)
+                AddMsgAndPrint("\tMissing " + str(len(values)) + " " + fldName + " value(s) in " + os.path.basename(fc) + " layer:",2)
 
                 for value in values:
-                    PrintMsg("\t\tObjectID: {0}".format(value),2)
+                    AddMsgAndPrint("\t\tObjectID: {0}".format(value),2)
 
                 return False
 
@@ -464,7 +465,7 @@ def CheckAttributes(fc, ssurgoType):
 ##
 ##            # Report any blank values
 ##            if len(values) > 0:
-##                PrintMsg("\tMissing AREASYMBOL value(s) in " + os.path.basename(fc) + " layer:",2)
+##                AddMsgAndPrint("\tMissing AREASYMBOL value(s) in " + os.path.basename(fc) + " layer:",2)
 ##
 ##                for value in values:
 ##                    print("\t\tObjectID: {0}".format(value))
@@ -526,31 +527,31 @@ def SetOutputCoordinateSystem(inLayer):
         outputGCS = outputSR.GCS.name
 
         # Describe the input layer and get the input layer's spatial reference, other properties
-        desc = arcpy.Describe(inLayer)
-        dType = desc.dataType
-        sr = desc.spatialReference
+        desc = arcpy.da.Describe(inLayer)
+        dType = desc['dataType']
+        sr = desc['spatialReference']
         srType = sr.type.upper()
         inputGCS = sr.GCS.name
 
         # Print name of input layer and dataype
         if dType.upper() == "FEATURELAYER":
-            inputName = desc.nameString
+            inputName = desc['nameString']
 
         elif dType.upper() == "FEATURECLASS":
-            inputName = desc.baseName
+            inputName = desc['baseName']
 
         else:
-            inputName = desc.name
+            inputName = desc['name']
 
         # -----------
         # input and output geographic coordinate systems are the same
         # no datum transformation method required
         if outputGCS == inputGCS:
-            PrintMsg("\nNo datum transformation required", 1)
+            AddMsgAndPrint("\nNo datum transformation required", 1)
             #tm = ""
 
         else:
-            PrintMsg("\tUsing datum transformation method 'WGS_1984_(ITRF00)_To_NAD_1983' \n ", 1)
+            AddMsgAndPrint("\tUsing datum transformation method 'WGS_1984_(ITRF00)_To_NAD_1983' \n ", 1)
 
         """   COMMENTED THIS OUT AND HARD CODED THE TRANSFORMATION TO ITRF00 """
 ##
@@ -573,7 +574,7 @@ def SetOutputCoordinateSystem(inLayer):
 ##
 ##            elif AOI == "Other":
 ##                tm = "NAD_1983_To_WGS_1984_1"
-##                PrintMsg("\nWarning! No coordinate shift is being applied", 0)
+##                AddMsgAndPrint("\nWarning! No coordinate shift is being applied", 0)
 ##
 ##            else:
 ##                raise MyError, "Invalid geographic region (" + AOI + ")"
@@ -584,13 +585,9 @@ def SetOutputCoordinateSystem(inLayer):
 
         # Prompt user of the datum transformation being used
         #if tm != "":
-        #PrintMsg("\n\tUsing datum transformation method 'WGS_1984_(ITRF00)_To_NAD_1983' \n ", 1)
+        #AddMsgAndPrint("\n\tUsing datum transformation method 'WGS_1984_(ITRF00)_To_NAD_1983' \n ", 1)
 
         return True
-
-    except MyError, e:
-        PrintMsg(str(e) + "\n", 2)
-        return False
 
     except:
         errorMsg()
@@ -653,20 +650,20 @@ def CheckFieldInfo(outFC, ssurgoSchema):
     # defined in the 'SSURGOFieldInfo' function
 
     try:
-        fields = arcpy.Describe(outFC).fields
+        fields = arcpy.da.Describe(outFC)['fields']
         inSchema = []
 
         for fld in fields:
-            inSchema.append((fld.baseName.encode('ascii'), fld.length, fld.precision, fld.scale, fld.type.encode('ascii')))
+            inSchema.append((fld.baseName, fld.length, fld.precision, fld.scale, fld.type))
 
         if inSchema == ssurgoSchema:
             return True
 
         else:
-            PrintMsg("Problem with " + outFC + " attribute table", 2)
-            PrintMsg("-----------------------------------------------------")
-            PrintMsg("\tOutput ShapeFile: " + str(inSchema), 0)
-            PrintMsg("\n\tSSURGO Standard: " + str(ssurgoSchema), 1)
+            AddMsgAndPrint("Schema mismatch problem with " + outFC + " attribute table", 2)
+            AddMsgAndPrint("-----------------------------------------------------",2)
+            AddMsgAndPrint("\tOutput ShapeFile: " + str(inSchema), 2)
+            AddMsgAndPrint("\n\tSSURGO Standard: " + str(ssurgoSchema), 2)
             return False
 
     except:
@@ -687,7 +684,7 @@ def CreateSSA(fc,loc,AS):
 
         # return false if shapefile already exists
         if env.overwriteOutput == False and arcpy.Exists(SSApath):
-            PrintMsg("Output shapefile (" + os.path.basename(SSApath) + ") already exists", 2)
+            AddMsgAndPrint("Output shapefile (" + os.path.basename(SSApath) + ") already exists", 2)
             return False
 
         arcpy.Dissolve_management(fc,SSApath,"AREASYMBOL", "", "SINGLE_PART")
@@ -696,11 +693,11 @@ def CreateSSA(fc,loc,AS):
         ssaCnt = int(arcpy.GetCount_management(SSApath).getOutput(0))
 
         if ssaCnt < 1:
-            PrintMsg("\n\t" + os.path.basename(SSApath) + " has no features",2)
+            AddMsgAndPrint("\n\t" + os.path.basename(SSApath) + " has no features",2)
             return False
 
         else:
-            PrintMsg("\tSurvey area polygons: " + Number_Format(ssaCnt, 0, True) + " features exported", 0)
+            AddMsgAndPrint("\tSurvey area polygons: " + Number_Format(ssaCnt, 0, True) + " features exported", 0)
 
         del SSApath
         del ssaCnt
@@ -727,15 +724,15 @@ def GetLayerExtent(layer):
 
         if len(layerExtent) == 4:
             #arcpy.AddMessage(" ")
-            PrintMsg("\tSurvey Bounding Coordinates: ",0)
-            PrintMsg("\t\tWest_Bounding_Coordinate: " + str(layerExtent[0]),0)
-            PrintMsg("\t\tEast_Bounding_Coordinate: " + str(layerExtent[1]),0)
-            PrintMsg("\t\tNorth_Bounding_Coordinate: " + str(layerExtent[2]),0)
-            PrintMsg("\t\tSouth_Bounding_Coordinate: " + str(layerExtent[3]) + "\n ",0)
+            AddMsgAndPrint("\tSurvey Bounding Coordinates: ",0)
+            AddMsgAndPrint("\t\tWest_Bounding_Coordinate: " + str(layerExtent[0]),0)
+            AddMsgAndPrint("\t\tEast_Bounding_Coordinate: " + str(layerExtent[1]),0)
+            AddMsgAndPrint("\t\tNorth_Bounding_Coordinate: " + str(layerExtent[2]),0)
+            AddMsgAndPrint("\t\tSouth_Bounding_Coordinate: " + str(layerExtent[3]) + "\n ",0)
 
         else:
             return False
-            #PrintMsg("\n\tCould not determine Spatial Domain of " + os.path.basename(layer)
+            #AddMsgAndPrint("\n\tCould not determine Spatial Domain of " + os.path.basename(layer)
 
         del layerExtent
         return True
@@ -777,7 +774,7 @@ def ProcessSurveyArea(inLoc, exportList, outLoc, theAS, ssurgoFields, msg):
             arcpy.CreateFolder_management(outLoc, theAS.lower())
 
         else:
-            PrintMsg("\t" + theAS.lower() + " Folder Exists; Contents will be overwritten\n",1)
+            AddMsgAndPrint("\t" + theAS.lower() + " Folder Exists; Contents will be overwritten\n",1)
 
         # directory path to the export folder
         surveyLoc = os.path.join(outLoc, theAS.lower())
@@ -795,7 +792,7 @@ def ProcessSurveyArea(inLoc, exportList, outLoc, theAS, ssurgoFields, msg):
 
         for fc in exportList:
 
-            arcpy.SetProgressorLabel("Exporting Soil Survey: " + theAS + " " + str(msg))
+            arcpy.SetProgressorLabel("\nExporting Soil Survey: " + theAS + " " + str(msg))
 
             layerCount += 1
 
@@ -823,7 +820,7 @@ def ProcessSurveyArea(inLoc, exportList, outLoc, theAS, ssurgoFields, msg):
 
                 # return false if shapefile already exists
                 if env.overwriteOutput == False and arcpy.Exists(outFC):
-                    PrintMsg("Output shapefile (" + outFC + ") already exists", 2)
+                    AddMsgAndPrint("Output shapefile (" + outFC + ") already exists", 2)
                     return False
 
                 # Convert areasymbol selection to a shapefile
@@ -831,7 +828,7 @@ def ProcessSurveyArea(inLoc, exportList, outLoc, theAS, ssurgoFields, msg):
 
                 # Failed to export shapefile
                 if not arcpy.Exists(outFC):
-                    PrintMsg("Failed to create output shapefile (" + outFC + ")", 2)
+                    AddMsgAndPrint("Failed to create output shapefile (" + outFC + ")", 2)
                     return False
 
                 # if there are features in layer check the schema and attribute field
@@ -863,10 +860,10 @@ def ProcessSurveyArea(inLoc, exportList, outLoc, theAS, ssurgoFields, msg):
 
                         del fields
 
-                    PrintMsg("\t" + ssurgoType + " exported: " + Number_Format(iCnt, 0, True), 0)
+                    AddMsgAndPrint("\t" + ssurgoType + " exported: " + Number_Format(iCnt, 0, True), 0)
 
                 else:
-                    PrintMsg("\t" + ssurgoType + " exported: " + Number_Format(iCnt, 0, True), 0)
+                    AddMsgAndPrint("\t" + ssurgoType + " exported: " + Number_Format(iCnt, 0, True), 0)
                     #arcpy.Delete_management(outFC)
 
                 # Create survey boundary if _a layer by dissolving it
@@ -876,7 +873,7 @@ def ProcessSurveyArea(inLoc, exportList, outLoc, theAS, ssurgoFields, msg):
 
                 # strictly formatting
                 if layerCount == 6:
-                    PrintMsg("\n",0)
+                    AddMsgAndPrint("\n",0)
 
                 del outFC, iCnt
 
@@ -895,28 +892,22 @@ def ProcessSurveyArea(inLoc, exportList, outLoc, theAS, ssurgoFields, msg):
 
         if uniqueSpecFeatureCount > 0:
             #arcpy.AddMessage(" ")
-            PrintMsg("\t" + "Unique Special Feature Count: " + Number_Format(uniqueSpecFeatureCount, 0, True))
+            AddMsgAndPrint("\t" + "Unique Special Feature Count: " + Number_Format(uniqueSpecFeatureCount, 0, True))
 
             for feat in uniquefeatList:
-                PrintMsg("\t\t" + feat)
+                AddMsgAndPrint("\t" + feat)
 
         # Report out extent of SAPOLYGON layer
         if not GetLayerExtent(os.path.join(surveyLoc,theAS.lower() + "_b.shp")):
-            PrintMsg("\n\tCould not determine Spatial Domain of " + os.path.basename(layer) + "\n",2)
+            AddMsgAndPrint("\n\tCould not determine Spatial Domain of " + os.path.basename(layer) + "\n",2)
 
         folderSize = GetFolderSize(surveyLoc)
-        PrintMsg("\t" + "Directory Size: " + str(folderSize) + " MB",0)
+        AddMsgAndPrint("\t" + "Directory Size: " + str(folderSize) + " MB",0)
 
         # remove all .xml files
         for file in os.listdir(surveyLoc):
             if file.endswith('.xml'):
                 os.remove(os.path.join(surveyLoc, file))
-
-        del surveyLoc
-        del sQuery
-        del uniqueSpecFeatureCount
-        del uniquefeatList
-        del layerCount
 
         return True
 
@@ -928,123 +919,124 @@ def ProcessSurveyArea(inLoc, exportList, outLoc, theAS, ssurgoFields, msg):
 import string, os, sys, traceback, locale, arcpy
 from arcpy import env
 
-try:
-    arcpy.OverwriteOutput = True
+if __name__ == '__main__':
 
-    # 4 Script arguments...
-    inLoc = arcpy.GetParameterAsText(0)                    # input workspace or featuredataset
-    outLoc = arcpy.GetParameterAsText(1)                   # output folder where shapefiles will be placed
-    #AOI = arcpy.GetParameterAsText(2)                      # input layer geographic location (CONUS, AK, HI, PR, OTHER)
-    asList = arcpy.GetParameter(2)                         # List of Areasymbol values to beexported from the geodatabase
+    try:
 
-    # path to textfile that will log messages
-    textFilePath = outLoc + os.sep + "SSURGO_export.txt"
+        # 4 Script arguments...
+        inLoc = arcpy.GetParameterAsText(0)         # input workspace or featuredataset
+        outLoc = arcpy.GetParameterAsText(1)        # output folder where shapefiles will be placed
+        asList = arcpy.GetParameter(2)              # List of Areasymbol values to beexported from the geodatabase
 
-    # record basic user inputs and settings to log file for future purposes
-    logBasicSettings()
+        arcpy.env.parallelProcessingFactor = "75%"
+        arcpy.env.overwriteOutput = True
 
-    # Set workspace to the input geodatabase or featuredataset
-    env.workspace = inLoc
+        # path to textfile that will log messages
+        textFilePath = outLoc + os.sep + "SSURGO_export.txt"
 
-    # list containing any problem ssurveys
-    problemSurveys = []
+        # record basic user inputs and settings to log file for future purposes
+        logBasicSettings()
 
-    # Create dictionary of field information for SSURGO shapefiles
-    # This will be used to check the output shapefiles for correct schema
-    ssurgoFields = SSURGOFieldInfo()
+        # Set workspace to the input geodatabase or featuredataset
+        env.workspace = inLoc
 
-    # Get a list of valid SSURGO featureclasses found in the input workspace
-    exportList = GetExportLayers(inLoc)
+        # list containing any problem ssurveys
+        problemSurveys = []
 
-    # Make sure each valid SSURGO fc has AREASYMBOL fully populated; MUSYM/FEATSYM is checked after
-    # the data has been exported.  If nulls occur there, the entire survey is deleted.
-    for fc in exportList:
-        if not CheckAttributes(fc,"Survey area polygons"):
-            raise MyError, "Halting export process"
+        # Create dictionary of field information for SSURGO shapefiles
+        # This will be used to check the output shapefiles for correct schema
+        ssurgoFields = SSURGOFieldInfo()
 
-    # should have exactly 6 feature classes found
-    if len(exportList) == 0:
-        raise MyError, "\tFound no required SSURGO featureclasses........Halting export process"
+        # Get a list of valid SSURGO featureclasses found in the input workspace
+        exportList = GetExportLayers(inLoc)
 
-    elif len(exportList) < 6:
-        raise MyError, "\tFailed to find all 6 required input SSURGO featureclass types"
+        # Make sure each valid SSURGO fc has AREASYMBOL fully populated; MUSYM/FEATSYM is checked after
+        # the data has been exported.  If nulls occur there, the entire survey is deleted.
+        for fc in exportList:
+            if not CheckAttributes(fc,"Survey area polygons"):
+                AddMsgAndPrint("Halting export process",2)
+                exit()
 
-    elif len(exportList) > 6:
-        raise MyError, "\tFound more than the 6 required input SSURGO featureclass types"
+        # should have exactly 6 feature classes found
+        if len(exportList) == 0:
+            AddMsgAndPrint("\tFound no required SSURGO featureclasses........Halting export process",2)
 
-    PrintMsg("\nExporting SSURGO shapefiles for " + Number_Format(len(asList), 0, True) + " survey area(s) to folder '" + outLoc + "'", 1)
+        elif len(exportList) < 6:
+            AddMsgAndPrint("\tFailed to find all 6 required input SSURGO featureclass types",2)
+            exit()
 
-    # if featuredataset is enforced then we can set the env.coord system using any fc from within the export list
-    # and not have to check transformation everytime we export an individual SSA .shp.
-    # set output coordinate system env variable to (4326 - WGS84)
+        elif len(exportList) > 6:
+            AddMsgAndPrint("\tFound more than the 6 required input SSURGO featureclass types",2)
+            exit()
 
-    bSR = False
-    for fc in exportList:
-        ssurgoType, fileName = GetFCType(fc, "")
+        AddMsgAndPrint("\nExporting SSURGO shapefiles for " + Number_Format(len(asList), 0, True) + " survey area(s) to folder '" + outLoc + "'")
 
-        if ssurgoType == "Map unit polygons":
+        # if featuredataset is enforced then we can set the env.coord system using any fc from within the export list
+        # and not have to check transformation everytime we export an individual SSA .shp.
+        # set output coordinate system env variable to (4326 - WGS84)
 
-            bSR = SetOutputCoordinateSystem(fc)
-            break
+        bSR = False
+        for fc in exportList:
+            ssurgoType, fileName = GetFCType(fc, "")
 
-    # Either Mapunit Polygon was not found or not able to set spatial reference
-    if not bSR:
-        raise MyError, "Failed to set output spatial reference!....Halting export process"
+            if ssurgoType == "Map unit polygons":
 
-    # Establish progressor object which allows progress info to be passed to dialog box.
-    arcpy.SetProgressor("step", "Exporting SSURGO shapefiles for " + Number_Format(len(asList), 0, True) + " soil surveys...",  0, len(asList), 1)
+                bSR = SetOutputCoordinateSystem(fc)
+                break
 
-    # Process each soil survey, one at a time.  If a problem occurs,
-    # it will be reported but nothing will be deleted
+        # Either Mapunit Polygon was not found or not able to set spatial reference
+        if not bSR:
+            AddMsgAndPrint("Failed to set output spatial reference!....Halting export process",2)
+            exit()
 
-    iCnt = 1
-    for theAS in asList:
+        # Establish progressor object which allows progress info to be passed to dialog box.
+        arcpy.SetProgressor("step", "Exporting SSURGO shapefiles for " + Number_Format(len(asList), 0, True) + " soil surveys...",  0, len(asList))
 
-        arcpy.SetProgressorLabel("Exporting Soil Survey: " + theAS + " (" + str(iCnt) + " of " + str(len(asList)) + ")")
-        msgString = " (" + str(iCnt) + " of " + str(len(asList)) + ")"
+        # Process each soil survey, one at a time.  If a problem occurs,
+        # it will be reported but nothing will be deleted
 
-        PrintMsg("\nExporting Soil Survey: " + theAS, 0)
-        PrintMsg("-------------------------------------------------------", 0)
+        iCnt = 1
+        for theAS in asList:
 
-        bProcessed = ProcessSurveyArea(inLoc, exportList, outLoc, theAS, ssurgoFields, msgString)
-        del msgString
+            arcpy.SetProgressorLabel("Exporting Soil Survey: " + theAS + " (" + str(iCnt) + " of " + str(len(asList)) + ")")
+            msgString = " (" + str(iCnt) + " of " + str(len(asList)) + ")"
 
-        if bProcessed == False:
-            PrintMsg("\n\tSoil Survey Area " + theAS + "  will not be exported",2)
-            problemSurveys.append(theAS)
+            AddMsgAndPrint("\nExporting Soil Survey: " + theAS)
+            AddMsgAndPrint("-------------------------------------------------------")
 
-        iCnt += 1
+            bProcessed = ProcessSurveyArea(inLoc, exportList, outLoc, theAS, ssurgoFields, msgString)
+            del msgString
 
-        arcpy.SetProgressorPosition()
+            if bProcessed == False:
+                AddMsgAndPrint("\n\tSoil Survey Area " + theAS + "  will not be exported",2)
+                problemSurveys.append(theAS)
 
-    arcpy.ResetProgressor()
-    del iCnt
+            iCnt += 1
 
-    PrintMsg("\n=======================================================", 0)
+            arcpy.SetProgressorPosition()
 
-    # Report problem surveys
-    if len(problemSurveys) > 0:
-        PrintMsg("The following survey(s) failed to export: " + ", ".join(problemSurveys), 2)
-        PrintMsg("\n" + Number_Format(len(asList) - len(problemSurveys), 0, True) + " of " + Number_Format(len(asList), 0, True) + " surveys were exported to the '" + outLoc + "' folder", 0)
+        arcpy.ResetProgressor()
+        del iCnt
 
-    else:
-        if len(asList) > 2:
-            PrintMsg("\nAll " + Number_Format(len(asList), 0, True) + " surveys successfully exported to the '" + outLoc + "' folder", 1)
+        AddMsgAndPrint("\n=======================================================")
 
-        elif len(asList) == 1:
-            PrintMsg("\nSelected survey (" + asList[0] + ") successfully exported to the '" + outLoc + "' folder", 1)
+        # Report problem surveys
+        if len(problemSurveys) > 0:
+            AddMsgAndPrint("The following survey(s) failed to export: " + ", ".join(problemSurveys),2)
+            AddMsgAndPrint("\n" + Number_Format(len(asList) - len(problemSurveys), 0, True) + " of " + Number_Format(len(asList), 0, True) + " surveys were exported to the '" + outLoc + "' folder")
 
-        elif len(asList) == 2:
-            PrintMsg("\nBoth selected surveys successfully exported to the '" + outLoc + "' folder", 1)
+        else:
+            if len(asList) > 2:
+                AddMsgAndPrint("\nAll " + Number_Format(len(asList), 0, True) + " surveys successfully exported to the '" + outLoc + "' folder")
 
-        elif len(asList) == 0:
-            PrintMsg("\nNo surveys were exported", 2)
+            elif len(asList) == 1:
+                AddMsgAndPrint("\nSelected survey (" + asList[0] + ") successfully exported to the '" + outLoc + "' folder")
 
-    PrintMsg(" ", 0)
+            elif len(asList) == 2:
+                AddMsgAndPrint("\nBoth selected surveys successfully exported to the '" + outLoc + "' folder")
 
-except MyError, e:
-    # Example: raise MyError, "This is an error message"
-    PrintMsg(str(e) + "\n", 2)
+            elif len(asList) == 0:
+                AddMsgAndPrint("\nNo surveys were exported",2)
 
-except:
-    errorMsg()
+    except:
+        errorMsg()
