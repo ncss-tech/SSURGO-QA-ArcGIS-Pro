@@ -29,55 +29,68 @@
 #08/01/2014
 #added the check to see if there were any folders that had the SSURGO convention(state abbreviation ###) that did not have all the required _a, _b, _c, _d, _l,_p files
 #and were thus invisible to the validation and not processed
+
+# ==========================================================================================
+# Updated  2/1/2020 - Adolfo Diaz
+#
+# - Updated and Tested for ArcGIS Pro 2.5.2 and python 3.6
+# - Validation Code was updated to conform with proper indentation
+# - All cursors were updated to arcpy.da
+# - Added code to remove layers from an .aprx rather than simply deleting them
+# - Updated AddMsgAndPrint to remove ArcGIS 10 boolean and gp function
+# - Updated errorMsg() Traceback functions slightly changed for Python 3.6.
+# - Added parallel processing factor environment
+# - swithced from sys.exit() to exit()
+# - All gp functions were translated to arcpy
+# - Every function including main is in a try/except clause
+# - Main code is wrapped in if __name__ == '__main__': even though script will never be
+#   used as independent library.
+# - Normal messages are no longer Warnings unnecessarily.
+
 #-------------------------------------------------------------------------------
 
 
-class MyError(Exception):
-    pass
-
-#======================================================================================================================================
-
-def errorMsg():
-
-    try:
-
-        tb = sys.exc_info()[2]
-        tbinfo = traceback.format_tb(tb)[0]
-        theMsg = tbinfo + " \n" + str(sys.exc_type)+ ": " + str(sys.exc_value) + " \n"
-        arcMsg = "ArcPy ERRORS:\n" + arcpy.GetMessages(2) + "\n"
-        PrintMsg(theMsg, 2)
-        PrintMsg(arcMsg, 2)
-
-    except:
-
-        PrintMsg("Unhandled error in errorMsg method", 2)
-
-#======================================================================================================================================
-
-
-def PrintMsg(msg, severity=0):
+# ===============================================================================================================
+def AddMsgAndPrint(msg, severity=0):
+    # prints message to screen if run as a python script
     # Adds tool message to the geoprocessor
     #
     #Split the message on \n first, so that if it's multiple lines, a GPMessage will be added for each line
     try:
 
-        for string in msg.split('\n'):
+        print(msg)
+        #for string in msg.split('\n'):
             #Add a geoprocessing message (in case this is run as a tool)
-            if severity == 0:
-                arcpy.AddMessage(string)
+        if severity == 0:
+            arcpy.AddMessage(msg)
 
-            elif severity == 1:
-                arcpy.AddWarning(string)
+        elif severity == 1:
+            arcpy.AddWarning(msg)
 
-            elif severity == 2:
-                arcpy.AddError(string)
+        elif severity == 2:
+            arcpy.AddError("\n" + msg)
 
     except:
         pass
 
+# ================================================================================================================
+def errorMsg():
+    try:
+
+        exc_type, exc_value, exc_traceback = sys.exc_info()
+        theMsg = "\t" + traceback.format_exception(exc_type, exc_value, exc_traceback)[1] + "\n\t" + traceback.format_exception(exc_type, exc_value, exc_traceback)[-1]
+
+        if theMsg.find("exit") > -1:
+            AddMsgAndPrint("\n\n")
+            pass
+        else:
+            AddMsgAndPrint(theMsg,2)
+
+    except:
+        AddMsgAndPrint("Unhandled error in unHandledException method", 2)
+        pass
+
 #======================================================================================================================================
-
-
 def sfDict():
 
     try:
@@ -120,7 +133,6 @@ def sfDict():
         return False, 'Unhandled error in sfDict'
 
 #======================================================================================================================================
-
 def spatialValidator(inPoint, inLine):
 
     try:
@@ -181,7 +193,7 @@ def spatialValidator(inPoint, inLine):
 
         if len(areaSymLst) > 1:
             svErr.append('More than 1 AREASYMBOL found in spatial data for ' + eKey)
-            #PrintMsg(svArSyMsg, 1)
+            #AddMsgAndPrint(svArSyMsg, 1)
 
 ##            return False, 'Too many areasymbols encountered in the special feature file(s)', None, None, None, None, None
         specFeatLst = list(set(localPointLst + localLineLst))
@@ -195,10 +207,8 @@ def spatialValidator(inPoint, inLine):
 
 
 #======================================================================================================================================
-
-
 def txtValidator(xstTxt, areaSymLst):
-    PrintMsg(areaSymLst)
+    AddMsgAndPrint(areaSymLst)
     totalError = 0
 
     try:
@@ -209,39 +219,37 @@ def txtValidator(xstTxt, areaSymLst):
             for line in lines:
                 countLine = countLine + 1
                 lineLst = line.split('|')
-                if line.count('"') <> 10:
+                if line.count('"') != 10:
                     lcMsg = ('Missing quotation mark(s) error on line ' + str(countLine) + ' in ' + xstTxt)
                     tvErr.append(lcMsg)
-                    #PrintMsg(lcMsg + '\n', 1)
+                    #AddMsgAndPrint(lcMsg + '\n', 1)
                     totalError = totalError + 1
                 elif '   ' in line:
                     xspMsg = 'Found multiple space error on line ' + str(countLine) + ' in ' + xstTxt
                     tvErr.append(xspMsg)
-                    #PrintMsg(xspMsg + '\n', 1)
+                    #AddMsgAndPrint(xspMsg + '\n', 1)
                     totalError = totalError + 1
                 elif line[1:6] not in areaSymLst:
                     asMsg = 'AREASYMBOL mismatch between text file and spatial, line ' + str(countLine) + ' in ' + xstTxt
                     tvErr.append(asMsg)
-                    #PrintMsg(asMsg + '\n', 1)
+                    #AddMsgAndPrint(asMsg + '\n', 1)
                     totalError = totalError + 1
-                elif len(lineLst) <> 6:
+                elif len(lineLst) != 6:
                     pipeMsg = 'Missing element or pipe on line ' + str(countLine) + ' in ' + xstTxt
                     tvErr.append(pipeMsg)
-                    #PrintMsg( pipeMsg + '\n', 1)
+                    #AddMsgAndPrint( pipeMsg + '\n', 1)
                     totalError = totalError + 1
-                elif len(lineLst[0]) <> 7:
+                elif len(lineLst[0]) != 7:
                     asLenMsg = 'Incorrect length for AREASYMBOL on line ' + str(countLine) + ' in ' + xstTxt
                     tvErr.append(asLenMsg)
-                    #PrintMsg( asMsg + '\n', 1)
+                    #AddMsgAndPrint( asMsg + '\n', 1)
                     totalError = totalError + 1
                 #ADHOC FEATSYM are not necessarily 3 characters
                 #elif len(lineLst[2]) != 5:
-                    #PrintMsg( '\nIncorrect length for FEATSYM on line ' + str(countLine) + ' in ' + xstTxt, 1)
+                    #AddMsgAndPrint( '\nIncorrect length for FEATSYM on line ' + str(countLine) + ' in ' + xstTxt, 1)
 
 
         chkTXT.close()
-
-
         return True, tvErr
 
     except:
@@ -251,11 +259,7 @@ def txtValidator(xstTxt, areaSymLst):
         return False, 'Unhandled error in txtValidator while processing' + eKey + ', Reprocessing Required'
 
 #========================================================================================================
-
-
-
 def txtLst(xstTxt):
-
 
     try:
 
@@ -282,8 +286,6 @@ def txtLst(xstTxt):
         return False, 'Unhandled error in txtLst while processing ' + xstTxt + ', Reprocessing Required'
 
 #========================================================================================================
-
-
 def crossCheck(xstTxt):
 
     try:
@@ -307,10 +309,8 @@ def crossCheck(xstTxt):
         errorMsg()
         return False, 'Unhandled error in crossCheck, Reprocessing Required', None
 
-
-
+#========================================================================================================
 def fileUpdater(xstTxt):
-
 
     import bisect
 
@@ -395,10 +395,7 @@ def fileUpdater(xstTxt):
         errorMsg()
         return False, 'Unhandled error in fileUpdater, Reprocessing Required', None, None
 
-
-
 #========================================================================================================
-
 def fileGenerator():
 
     try:
@@ -421,7 +418,7 @@ def fileGenerator():
         containerLst = []
         withDefLst = []
 
-        if len(getCompLst) <> 0:
+        if len(getCompLst) != 0:
             for eVal in getCompLst:
                 updateTxt = '"' + areaSymLst[0] + '"|"' + eVal + '"|'
                 if eVal in spfeatD:
@@ -460,17 +457,12 @@ def fileGenerator():
 
 
 #========================================================================================================
-
-
 import sys, os, arcpy, time, getpass, fnmatch, shutil, traceback
-
-
 
 #Parameters
 inSpatialDir = sys.argv[1]
 ssaSym = sys.argv[2]
 inTxtDir = sys.argv[3]
-
 
 crossCLst = list()
 if os.path.isdir(inSpatialDir):
@@ -483,12 +475,10 @@ if os.path.isdir(inSpatialDir):
 #a container to accumulate dict keys that successfully get a feature file
 execLst = list()
 
-PrintMsg(' \n \n ')
+AddMsgAndPrint(' \n \n ')
 sep = '-'*100
 
 try:
-
-
 
     with open(inSpatialDir + os.sep + 'QA_Special_Features_Report.txt', 'w') as f:
         start = time.strftime("%a, %d %b %Y %H:%M:%S")
@@ -530,10 +520,9 @@ try:
             del featPath
             del eSSA
 
-
         #+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
         #check type of existing feature file workspace and build a doctionary of paths {NC001:E:\GIS\NRCS\National_Special_Features/soilsf_t_nc001.txt}
-        if inTxtDir <> "#":
+        if inTxtDir != "#":
             desc = arcpy.Describe(inTxtDir)
             txtType = desc.dataElementType.upper()
 
@@ -581,7 +570,7 @@ try:
                     with open(os.path.dirname(inTxtDir) + os.sep + 'FEATDESC.txt', 'r') as ff:
                         with open(sfTmpDir + os.sep + 'soilsf_t_' + eVal.lower() + '.txt', 'w') as o:
                             for line in ff.readlines():
-                                if line.find(eVal.upper()) <> -1:
+                                if line.find(eVal.upper()) != -1:
                                     o.write(line)
                         o.close()
                     ff.close()
@@ -603,16 +592,15 @@ try:
                 compDict[eKey] = qaDict[eKey] + txtDict[eKey]
             else: compDict[eKey] = qaDict[eKey]
 
-
         sCount = len(compDict)
         cCount = 0
 
         #start chuggin'.......
-        for eKey in sorted(compDict.iterkeys()):
-            PrintMsg(' \n \nProcessing for: ' + eKey + '\n')
+        for eKey in sorted(compDict.keys()):
+            AddMsgAndPrint(' \n \nProcessing for: ' + eKey + '\n')
             arcpy.SetProgressorLabel('Processing for: ' + eKey)
             arcpy.SetProgressorPosition()
-            valLst = compDict.get(eKey)
+            valLst = compDict[eKey]
 
             inPoint = valLst[0]
             inLine = valLst[1]
@@ -626,11 +614,11 @@ try:
             if inPoint == 'p':
                 noPtMsg = 'No special feature point file submitted for ' + eKey.upper()
                 f.write('\t' + noPtMsg + '\n')
-                PrintMsg(noPtMsg, 1)
+                AddMsgAndPrint(noPtMsg, 1)
             if inLine == 'l':
                 noLnMsg = 'No special feature line file submitted for ' + eKey.upper()
                 f.write('\t' + noLnMsg + '\n')
-                PrintMsg(noLnMsg, 1)
+                AddMsgAndPrint(noLnMsg, 1)
 
 
 
@@ -656,7 +644,7 @@ try:
                 if valLst[0] != 'p' or valLst[1] != 'l':
                     if ftCnt == 0:
                         emptyFeaturesMsg = 'Spatial files exist for ' + eKey + ' and there are no digitized features.  An empty feature file WILL be written\n'
-                        PrintMsg(emptyFeaturesMsg, 1)
+                        AddMsgAndPrint(emptyFeaturesMsg, 1)
                         f.write('\t\t' + '***WARNING***: '+ emptyFeaturesMsg + '\n')
 
 
@@ -667,13 +655,13 @@ try:
                         ' An EMPTY feature file WILL be written.\n'
 
                         f.write('\t\t' + '***WARNING***: ' + matchMsg)
-                        PrintMsg(matchMsg + '\n', 1 )
+                        AddMsgAndPrint(matchMsg + '\n', 1 )
 
                 if len(sv7)!=0:
                     for svMsg in sv7:
                         f.write('\t\t***WARNING***: '+ svMsg + '\n')
-                        PrintMsg('***WARNING***: ' + svMsg, 2)
-                        PrintMsg('ADDRESS ERRORS FOR ' + eKey + ' AND REPROCESS', 2)
+                        AddMsgAndPrint('***WARNING***: ' + svMsg, 2)
+                        AddMsgAndPrint('ADDRESS ERRORS FOR ' + eKey + ' AND REPROCESS', 2)
                         f.write('\t\tADDRESS ERRORS FOR ' + eKey + ' AND REPROCESS')
 
 
@@ -681,22 +669,22 @@ try:
             else:
                 svError = sv1
                 f.write('\t\t' + '!!!FAILURE!!!: ' + svError + '\n')
-                PrintMsg(sv1, 2)
+                AddMsgAndPrint(sv1, 2)
 
-            if len(valLst) == 3 and ftCnt <> 0:
+            if len(valLst) == 3 and ftCnt != 0:
                 if len(sv7) == 0:
                     tv0, tv1 = txtValidator(xstTxt, areaSymLst)
                     if tv0:
                         if len(tv1) != 0:
                             for tvMsg in tv1:
                                 f.write('\t\t' + '***WARNING***: ' + tvMsg + '\n')
-                                PrintMsg('***WARNING***: ' + tvMsg , 2)
-                                PrintMsg('ADDRESS ERRORS FOR ' + eKey + ' AND REPROCESS', 2)
+                                AddMsgAndPrint('***WARNING***: ' + tvMsg , 2)
+                                AddMsgAndPrint('ADDRESS ERRORS FOR ' + eKey + ' AND REPROCESS', 2)
 
 
                     else:
                         tvMsg = tv1
-                        PrintMsg('!!!FAILURE!!!: ' + tvMsg, 2)
+                        AddMsgAndPrint('!!!FAILURE!!!: ' + tvMsg, 2)
                         f.write('\t\t!!!FAILURE!!!: ' + tvMsg)
 
 
@@ -708,7 +696,7 @@ try:
 
                         else:
                             tLMsg = tL1
-                            PrintMsg(tLMsg, 2)
+                            AddMsgAndPrint(tLMsg, 2)
                             f.write('\t\t!!!FAILURE!!!: ' + tlMsg)
 
 
@@ -719,7 +707,7 @@ try:
                             pass
                         else:
                             ccMsg = cC1
-                            PrintMsg(ccMsg, 2)
+                            AddMsgAndPrint(ccMsg, 2)
                             f.write('\t\t!!!FAILURE!!!: ' + ccMsg)
 
 
@@ -732,7 +720,7 @@ try:
                             if len(fU1) + len(fU2) + len(fU3) == 0:
                                 fuMsg = ('<<<SUCCESS>>>: Generated the feature file using the ' + os.path.basename(xstTxt) + '. ALL FILES IN SYNC\n ')
                                 f.write('\t\t' + fuMsg)
-                                PrintMsg(fuMsg, 0)
+                                AddMsgAndPrint(fuMsg, 0)
                                 cCount = cCount + 1
                                 execLst.append(eKey.lower())
 
@@ -740,22 +728,22 @@ try:
 
                                 if len(fU1) > 0:
                                     noPtMsg ='***WARNING***: ' + ','.join(fU1) + ' were found in the existing ' + os.path.basename(xstTxt) + ' file with no matching spatial feature. They are not included the output feature file.'
-                                    PrintMsg(noPtMsg, 1)
+                                    AddMsgAndPrint(noPtMsg, 1)
                                     f.write('\t\t' + noPtMsg + '\n')
                                 if len(fU2) > 0:
                                     withDefMsg = '***WARNING***: ' +','.join(fU2) + ' were found in the spatial data but not in the ' + os.path.basename(xstTxt) + ' file.  A generic definition has been added for these features. MANUAL EDITS LIKELY.'
-                                    PrintMsg(withDefMsg, 1)
+                                    AddMsgAndPrint(withDefMsg, 1)
                                     f.write('\t\t' + withDefMsg + '\n')
                                 if len(fU3) > 0:
                                     noDefMsg = '***WARNING***: ' + ','.join(fU3) + ' were found in the spatial data but not in the ' + os.path.basename(xstTxt) + ' file.  A FEATNAME and FEATDESC place holder was added. MANUAL EDITS REQUIRED.'
-                                    PrintMsg(noDefMsg, 1)
+                                    AddMsgAndPrint(noDefMsg, 1)
                                     f.write('\t\t' + noDefMsg + '\n')
 
                                 cCount = cCount + 1
 
                                 fuMsgWarn = ('<<<SUCCESS>>>: Generated the feature file using the ' + os.path.basename(xstTxt) + '. REVIEW WARNINGS\n ')
                                 f.write('\t\t' + fuMsgWarn)
-                                PrintMsg(fuMsgWarn, 1)
+                                AddMsgAndPrint(fuMsgWarn, 1)
                                 execLst.append(eKey.lower())
 
 
@@ -765,7 +753,7 @@ try:
                         else:
 
                             fuMsg = fU1
-                            PrintMsg('!!!FAILURE!!!: ' + fuMsg, 2)
+                            AddMsgAndPrint('!!!FAILURE!!!: ' + fuMsg, 2)
                             f.write('\t\t!!!FAILURE!!!: ' + fuMsg)
 
             else:
@@ -776,7 +764,7 @@ try:
                     if fG0:
 
                         fGMsg = '<<<SUCCESS>>>: Generated the feature file for '+ eKey + ' using generic feature definitions if available. MANUAL EDITS LIKELY. \n '
-                        PrintMsg(fGMsg, 1)
+                        AddMsgAndPrint(fGMsg, 1)
                         f.write('\t\t' + fGMsg)
                         execLst.append(eKey.lower())
 
@@ -787,21 +775,21 @@ try:
                     else:
 
                          fGMsg = fG1
-                         PrintMsg('!!!FAILURE!!!: ' + fG1, 1)
+                         AddMsgAndPrint('!!!FAILURE!!!: ' + fG1, 1)
                          f.write('\t\t!!!FAILURE!!!: ' + fG1)
 
 
         f.write("################################################################################################################\n\nSUMMARY:\n\n")
 
         cntMsg = str(sCount) + ' survey areas submitted and ' + str(cCount) + ' feature files generated\n'
-        PrintMsg(cntMsg, 1)
+        AddMsgAndPrint(cntMsg, 1)
         f.write('\t' + cntMsg)
         paramSet = set(paramLst)
         execSet = set(execLst)
         fLst = list(paramSet.symmetric_difference(execSet))
         if len(fLst) > 0:
             failMsg = 'The following surveys were submitted but did not execute successfully: ' + ','.join(fLst)
-            PrintMsg(failMsg, 2)
+            AddMsgAndPrint(failMsg, 2)
             f.write('\t' + failMsg)
 
 
@@ -809,10 +797,10 @@ try:
             cCset = set(crossCLst)
             unAvLst = list(cCset.difference(paramSet))
             unAvLst.sort()
-            PrintMsg(' \n ')
+            AddMsgAndPrint(' \n ')
             #if len(unAvLst)>0:
             unAvMsg = ('The following folders found in the Input Spatial Features Folder appear to be SSURGO directories but are missing required files and were not available to the tool: \n \n' +'\t' + ','.join(unAvLst))
-            PrintMsg(unAvMsg, 1)
+            AddMsgAndPrint(unAvMsg, 1)
             f.write('\n\t' + unAvMsg)
 
     f.close()
@@ -824,8 +812,7 @@ try:
     except:
         pass
 
-
-    PrintMsg(' \n \n')
+    AddMsgAndPrint(' \n \n')
 
 except:
     errorMsg()
