@@ -9,108 +9,129 @@
 # Licence:     <your licence>
 #-------------------------------------------------------------------------------
 
-class MyError(Exception):
-    pass
 
-
-def errorMsg():
-
+# ===============================================================================================================
+def AddMsgAndPrint(msg, severity=0):
+    # prints message to screen if run as a python script
+    # Adds tool message to the geoprocessor
+    #
+    #Split the message on \n first, so that if it's multiple lines, a GPMessage will be added for each line
     try:
 
-        tb = sys.exc_info()[2]
-        tbinfo = traceback.format_tb(tb)[0]
-        theMsg = tbinfo + " \n" + str(sys.exc_type)+ ": " + str(sys.exc_value) + " \n"
-        arcMsg = "ArcPy ERRORS:\n" + arcpy.GetMessages(2) + "\n"
-        PrintMsg(theMsg, 2)
-        PrintMsg(arcMsg, 2)
+        #print(msg)
+        #for string in msg.split('\n'):
+            #Add a geoprocessing message (in case this is run as a tool)
+        if severity == 0:
+            arcpy.AddMessage(msg)
 
-    except:
+        elif severity == 1:
+            arcpy.AddWarning(msg)
 
-        PrintMsg("Unhandled error in errorMsg method", 2)
-
-
-
-def PrintMsg(msg, severity=0):
-
-    try:
-
-        for string in msg.split('\n'):
-            if severity == 0:
-                arcpy.AddMessage(string)
-
-            elif severity == 1:
-                arcpy.AddWarning(string)
-
-            elif severity == 2:
-                arcpy.AddError(" \n" + string)
+        elif severity == 2:
+            arcpy.AddError("\n" + msg)
 
     except:
         pass
 
+# ================================================================================================================
+def errorMsg():
+    try:
+
+        exc_type, exc_value, exc_traceback = sys.exc_info()
+        theMsg = "\t" + traceback.format_exception(exc_type, exc_value, exc_traceback)[1] + "\n\t" + traceback.format_exception(exc_type, exc_value, exc_traceback)[-1]
+
+        if theMsg.find("exit") > -1:
+            AddMsgAndPrint("\n\n")
+            pass
+        else:
+            AddMsgAndPrint(theMsg,2)
+
+    except:
+        AddMsgAndPrint("Unhandled error in unHandledException method", 2)
+        pass
 
 
+## ===================================================================================
+# Import system modules
+import sys, os, traceback, zipfile, arcpy
 
+if __name__ == '__main__':
 
-import sys, os, arcpy, zipfile, traceback
+    try:
 
-try:
+        # Directory containing exports
+        rootDir = arcpy.GetParameterAsText(0)
+        #rootDir = r'E:\SSURGO\export'
 
+        # Input SSA list to zip up
+        ssaList = arcpy.GetParameter(1)
+        #ssaList = ['ia005', 'ia015', 'ia059', 'ia061', 'ia151', 'ia187', 'wi113', 'wi119']
 
-    rootDir = sys.argv[1]
+        # Directory Path of valid SSAs to zip up
+        ssaToZipUp = list()
 
+        for ssa in ssaList:
 
+            ssaPath = os.path.join(rootDir,ssa)
 
-    crossCLst = list()
-    if os.path.isdir(rootDir):
-        pntlLst = os.listdir(rootDir)
-        for e in pntlLst:
-            if os.path.isdir(rootDir + os.sep + e) and len(e) == 5 and e[:2].isalpha() and e[2:].isdigit():
-                crossCLst.append(e.lower())
+            # Itereate through each file and determine if if is a legit SSA
+            if os.path.isdir(ssaPath) and len(ssa) == 5 and ssa[:2].isalpha() and ssa[2:].isdigit():
 
-    crossCnt = len(crossCLst)
+                # Get a list of export files to determine if they correct
+                exportFiles = os.listdir(ssaPath)
+                validFiles = [ssa + "_a.shp", ssa + "_b.shp", ssa + "_c.shp",ssa + "_d.shp",
+                              ssa + "_l.shp", ssa + "_p.shp", 'feature', ssa + ".met"]
+                validCnt=0
 
+                for item in validFiles:
+                    if not item in exportFiles:
+                        AddMsgAndPrint(ssa + " is missing " + item + " file; " + ssa + " will not be zipped",1)
+                        break
+                    else:
+                        validCnt+=1
 
-    zipSSA = []
+                if validCnt == 8:
+                    ssaToZipUp.append(ssaPath)
 
-    paramSSA = str(arcpy.GetParameterAsText(1))
-    paramLst = list(paramSSA.split(';'))
-    paramCnt = len(paramLst)
+        ssaCnt = len(ssaList)
+        ssaZipCnt = len(ssaToZipUp)
+        successfulZips = 0
 
-    arcpy.SetProgressor('step', 'Creating Archives...', 0, len(paramLst), 1)
-    for eSSA in paramLst:
-        zipSSA.append(str(arcpy.GetParameterAsText(0).strip(';')) + os.sep + eSSA)
+        arcpy.SetProgressor('step', 'Creating Archives...', 0, len(ssaToZipUp), 1)
 
-    for SSA in zipSSA:
-        PrintMsg("----------------" + SSA)
-        arcpy.SetProgressorLabel('Archiving: ' + os.path.basename(SSA))
-        PrintMsg(' \n ' + 'Creating zip archive for ' + os.path.basename(SSA) + '\n', 0)
+        # Iterate through every SSA path and zip up
+        for SSA in ssaToZipUp:
+            AddMsgAndPrint('\n-------- ' + 'Creating zip archive for ' + os.path.basename(SSA) + '\n')
+            arcpy.SetProgressorLabel('Archiving: ' + os.path.basename(SSA))
 
-        try:
-            with zipfile.ZipFile(SSA.lower() + '.zip', 'w', zipfile.ZIP_DEFLATED) as outZip:
-                PrintMsg(SSA.lower() + '.zip')
-                for dirpath, dirnames, filenames in os.walk(SSA):
-                    #outZip.write(dirpath)
-                    for filename in filenames:
-                        outZip.write(os.path.join(dirpath, filename), os.path.basename(SSA.lower()) + os.sep + filename)
-                        PrintMsg(os.path.join(dirpath, filename) + "---------" +  os.path.basename(SSA.lower()) + os.sep + filename)
-            outZip.close()
+            try:
+                zipFilePath = SSA.lower() + '.zip'
 
-        except:
-            PrintMsg("Problems with " + SSA)
-            continue
+                if os.path.exists(zipFilePath):
+                    AddMsgAndPrint(os.path.basename(SSA) + ".zip" + " Exists. Overwriting file",1)
 
-        arcpy.SetProgressorPosition()
-    PrintMsg(' \n ')
+                with zipfile.ZipFile(zipFilePath, 'w', zipfile.ZIP_DEFLATED) as outZip:
+                    AddMsgAndPrint("Archive Path: " + zipFilePath)
 
-    if paramCnt <> crossCnt:
-        paramSet = set(paramLst)
-        cCset = set(crossCLst)
-        unAvLst = list(cCset.difference(paramSet))
-        unAvLst.sort()
-        PrintMsg(' \n ')
-        unAvMsg = ('The following sub-folders in the Root Folder Folder appear to be SSURGO directories but are missing required files and were not available to the tool: \n \n' +'\t' + ','.join(unAvLst))
-        PrintMsg(unAvMsg, 2)
-        PrintMsg(' \n \n')
-except:
-    PrintMsg("Failed")
-    errorMsg()
+                    for dirpath, dirnames, filenames in os.walk(SSA):
+                        #outZip.write(dirpath)
+
+                        for filename in filenames:
+                            outZip.write(os.path.join(dirpath, filename), os.path.basename(SSA.lower()) + os.sep + filename)
+                            #AddMsgAndPrint(os.path.join(dirpath, filename) + "---------" +  os.path.basename(SSA.lower()) + os.sep + filename)
+                        successfulZips+=1
+
+                outZip.close()
+
+            except:
+                AddMsgAndPrint("Problems zipping up " + SSA,2)
+                errorMsg()
+                continue
+
+            if successfulZips > 0:
+                AddMsgAndPrint("Successfully zipped " + str(successfulZips) + " SSURGO export datasets")
+
+            arcpy.SetProgressorPosition()
+
+    except:
+        errorMsg()
