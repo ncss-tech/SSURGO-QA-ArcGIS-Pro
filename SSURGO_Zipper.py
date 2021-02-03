@@ -1,12 +1,20 @@
-#-------------------------------------------------------------------------------
-# Name:        module4
-# Purpose:
-#
-# Author:      Charles.Ferguson
-#
-# Created:     25/10/2013
-# Copyright:   (c) Charles.Ferguson 2013
-# Licence:     <your licence>
+# ---------------------------------------------------------------------------
+# SSURGO_Zipper.py
+# Created on: May 10, 2013
+
+# Author: Charles.Ferguson
+#         Soil Scientist
+#         National Soil Survey Center
+#         USDA - NRCS
+# e-mail: adolfo.diaz@usda.gov
+# phone: 608.662.4422 ext. 216
+
+# Author: Adolfo.Diaz
+#         GIS Specialist
+#         National Soil Survey Center
+#         USDA - NRCS
+# e-mail: adolfo.diaz@usda.gov
+# phone: 608.662.4422 ext. 216
 #-------------------------------------------------------------------------------
 
 
