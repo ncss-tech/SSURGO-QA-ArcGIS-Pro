@@ -23,7 +23,7 @@ Quality Assurance|Report Vertex Count|X|
 Quality Assurance|Report Vertex Density|X|
 Certification|Export to SSURGO Shapefile|X|
 Certification|Generate Special Feature File|X|
-Certification|ZIP SSURGO Export Folders||
+Certification|ZIP SSURGO Export Folders|X|
 
 # 1. Setup
 <ul> 
