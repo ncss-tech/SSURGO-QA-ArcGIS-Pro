@@ -68,31 +68,18 @@
 #
 # 2016-12-16 Converted the SOAP request to POST-REST request to SDaccess.  A.D.
 
-## ===================================================================================
-def errorMsg():
-    try:
-        tb = sys.exc_info()[2]
-        tbinfo = traceback.format_tb(tb)[0]
-        theMsg = tbinfo + " \n" + str(sys.exc_type)+ ": " + str(sys.exc_value) + " \n"
-        AddMsgAndPrint(theMsg, 2)
 
-    except:
-        AddMsgAndPrint("Unhandled error in errorMsg method", 2)
-        pass
-
-## ================================================================================================================
+# ===============================================================================================================
 def AddMsgAndPrint(msg, severity=0):
     # prints message to screen if run as a python script
     # Adds tool message to the geoprocessor
     #
-    # Split the message on \n first, so that if it's multiple lines, a GPMessage will be added for each line
-
+    #Split the message on \n first, so that if it's multiple lines, a GPMessage will be added for each line
     try:
 
-        #print msg
+        print(msg)
         #for string in msg.split('\n'):
-
-        # Add a geoprocessing message (in case this is run as a tool)
+            #Add a geoprocessing message (in case this is run as a tool)
         if severity == 0:
             arcpy.AddMessage(msg)
 
@@ -100,10 +87,26 @@ def AddMsgAndPrint(msg, severity=0):
             arcpy.AddWarning(msg)
 
         elif severity == 2:
-            arcpy.AddMessage("    ")
-            arcpy.AddError(msg)
+            arcpy.AddError("\n" + msg)
 
     except:
+        pass
+
+# ================================================================================================================
+def errorMsg():
+    try:
+
+        exc_type, exc_value, exc_traceback = sys.exc_info()
+        theMsg = "\t" + traceback.format_exception(exc_type, exc_value, exc_traceback)[1] + "\n\t" + traceback.format_exception(exc_type, exc_value, exc_traceback)[-1]
+
+        if theMsg.find("exit") > -1:
+            AddMsgAndPrint("\n\n")
+            pass
+        else:
+            AddMsgAndPrint(theMsg,2)
+
+    except:
+        AddMsgAndPrint("Unhandled error in unHandledException method", 2)
         pass
 
 ## ===================================================================================
@@ -165,7 +168,7 @@ def GetPublicationDate(areaSym):
     #
     # Test version of SDA: http://sdmdataaccessha.dev.sc.egov.usda.gov/
     #
-    import time, datetime, httplib, urllib2
+    import time, datetime, httplib
     import xml.etree.cElementTree as ET
 
     try:
@@ -189,9 +192,11 @@ def GetPublicationDate(areaSym):
         jData = json.dumps(dRequest)  # {"QUERY": "SELECT AREASYMBOL, AREANAME, CONVERT(varchar(10), [SAVEREST], 126) AS SAVEREST FROM SASTATUSMAP WHERE AREASYMBOL LIKE \'WI025\' ORDER BY AREASYMBOL", "FORMAT": "JSON"}
 
         # Send request to SDA Tabular service using urllib2 library
-        req = urllib2.Request(url, jData)
-        resp = urllib2.urlopen(req)
-        jsonString = resp.read()      # {"Table":[["WI025","Dane County, Wisconsin","2016-09-27"]]}
+                # ArcPro Request
+        jData = jData.encode('ascii')
+        response = urllib.request.urlopen(url,jData)
+
+        jsonString = response.read()      # {"Table":[["WI025","Dane County, Wisconsin","2016-09-27"]]}
 
         # Convert the returned JSON string into a Python dictionary.
         data = json.loads(jsonString)  # {u'Table': [[u'WI025', u'Dane County, Wisconsin', u'2016-09-27']]}
@@ -450,21 +455,20 @@ def GetDownload(areasym, surveyDate, importDB):
         # if we get this far then the download succeeded
         return zipName
 
-    except URLError, e:
-        if hasattr(e, 'reason'):
-            AddMsgAndPrint("\t\t" + areaSym + " - URL Error: " + str(e.reason), 1)
-
-        elif hasattr(e, 'code'):
-            AddMsgAndPrint("\t\t" + zipName + " - " + e.msg + " (errorcode " + str(e.code) + ")", 1)
-
+    except HTTPError as e:
+        AddMsgAndPrint('HTTP Error' + str(e),2)
         return ""
 
-    except socket.timeout, e:
-        AddMsgAndPrint("\t\t" + areaSym + " - server timeout error", 1)
+    except URLError as e:
+        AddMsgAndPrint('URL Error' + str(e),2)
         return ""
 
-    except socket.error, e:
-        AddMsgAndPrint("\t\t" + areasym + " - Web Soil Survey connection failure", 1)
+    except socket.timeout as e:
+        AddMsgAndPrint('Soil Data Access timeout error',2)
+        return ""
+
+    except socket.error as e:
+        AddMsgAndPrint('Socket error: ' + str(e),2)
         return ""
 
     except httplib.BadStatusLine:
@@ -1197,111 +1201,115 @@ def AddMuName(newFolder):
 # main
 # Import system modules
 import arcpy, sys, os, locale, string, traceback, shutil, zipfile, subprocess, glob, socket, csv, re
-from urllib2 import urlopen, URLError, HTTPError
+from urllib.request import Request, urlopen, URLError, HTTPError
+#from urllib2 import urlopen, URLError, HTTPError
 from arcpy import env
-from _winreg import *
 from datetime import datetime
 from time import sleep
 
-try:
-    arcpy.overwriteOutput = True
 
-    # Script arguments...
-    wc = arcpy.GetParameter(0)
-    dateFilter = arcpy.GetParameter(1)
-    outputFolder = arcpy.GetParameterAsText(2)
-    surveyList = arcpy.GetParameter(3)
-    importDB = arcpy.GetParameterAsText(4)
-    bRemoveTXT = arcpy.GetParameter(5)
-    bMuName = arcpy.GetParameter(6)
+if __name__ == '__main__':
 
-    # Set tabular import to False if no Template database is specified
-    if importDB == "":
-        AddMsgAndPrint(" \nWarning! Tabular import turned off (no database specified)", 1)
-        bImport = False
+    try:
+        arcpy.env.parallelProcessingFactor = "75%"
+        arcpy.env.overwriteOutput = True
 
-    else:
-        bImport = True
+        # Script arguments...
+        wc = arcpy.GetParameter(0)
+        dateFilter = arcpy.GetParameter(1)
+        outputFolder = arcpy.GetParameterAsText(2)
+        surveyList = arcpy.GetParameter(3)
+        importDB = arcpy.GetParameterAsText(4)
+        bRemoveTXT = arcpy.GetParameter(5)
+        bMuName = arcpy.GetParameter(6)
 
-    # initialize error and progress trackers
-    failedList = list()  # track list of failed downloads
-    failedCnt = 0        # track consecutive failures
-    skippedList = list() # track list of downloads that were skipped because a newer version already exists
-    goodList = list()    # list of successful surveys
-    iGet = 0
-
-    AddMsgAndPrint(" \n" + str(len(surveyList)) + " soil survey(s) selected for Web Soil Survey download", 0)
-
-    # set workspace to output folder
-    env.workspace = outputFolder
-
-    # Create ordered list by Areasymbol
-    asList = list()
-    asDict = dict()
-
-    for survey in surveyList:
-        env.workspace = outputFolder
-        surveyInfo = survey.split(",")
-        areaSym = surveyInfo[0].strip().upper()
-        asList.append(areaSym)
-        asDict[areaSym] = survey
-
-    asList.sort()
-
-    arcpy.SetProgressor("step", "Downloading SSURGO data...",  0, len(asList), 1)
-
-    # Proccess list of areasymbols
-    #
-    for areaSym in asList:
-        #
-        # Run import process in order of listed Areasymbol values
-        #
-        iGet += 1
-
-        # Run import process
-        iTotal = len(asList)
-        arcpy.SetProgressorLabel("Downloading survey " + areaSym + " from Web Soil Survey  (number " + str(iGet) + " of " + str(len(asList)) + " total)")
-        bProcessed = ProcessSurvey(outputFolder, importDB, areaSym, bImport, bRemoveTXT, iGet, iTotal)
-
-        if bProcessed == "Failed":
-            failedList.append(areaSym)
-            failedCnt += 1
-
-        elif bProcessed == "Skipped":
-            skippedList.append(areaSym)
-
-        elif bProcessed == "Successful":
-            # download successful
-            failedCnt = 0
-            goodList.append(areaSym)
-
-        if failedCnt > 4:
-            raise MyError, "Five consecutive download failures, bailing out"
-
-        if len(failedList) > 24:
-            raise MyError, "Twenty-five download failures, bailing out"
-
-        arcpy.SetProgressorPosition()
-
-    if len(failedList) > 0 or len(skippedList) > 0:
-        AddMsgAndPrint(" \nDownload process completed (" + Number_Format(len(goodList), 0, True) + " succeeded) with the following issues...", 1)
-
-    else:
-        if importDB:
-            AddMsgAndPrint(" \nAll " + Number_Format(len(asList), 0, True) + " surveys succcessfully downloaded, tabular import process complete", 0)
+        # Set tabular import to False if no Template database is specified
+        if importDB == "":
+            AddMsgAndPrint(" \nWarning! Tabular import turned off (no database specified)", 1)
+            bImport = False
 
         else:
-            AddMsgAndPrint(" \nAll " + Number_Format(len(asList), 0, True) + " surveys succcessfully downloaded (no tabular import)", 0)
+            bImport = True
 
-    arcpy.SetProgressorLabel("Processing complete...")
-    env.workspace = outputFolder
+        # initialize error and progress trackers
+        failedList = list()  # track list of failed downloads
+        failedCnt = 0        # track consecutive failures
+        skippedList = list() # track list of downloads that were skipped because a newer version already exists
+        goodList = list()    # list of successful surveys
+        iGet = 0
 
-except:
-    errorMsg()
+        AddMsgAndPrint(" \n" + str(len(surveyList)) + " soil survey(s) selected for Web Soil Survey download")
 
-finally:
-    if len(failedList) > 0:
-        AddMsgAndPrint(" \n\tWSS download failed for: " + ", ".join(failedList), 2)
+        # set workspace to output folder
+        env.workspace = outputFolder
 
-    if len(skippedList) > 0:
-        AddMsgAndPrint(" \n\tSkipped because a current version already exists: " + ", ".join(skippedList), 1)
+        # Create ordered list by Areasymbol
+        asList = list()
+        asDict = dict()
+
+        for survey in surveyList:
+            env.workspace = outputFolder
+            surveyInfo = survey.split(",")
+            areaSym = surveyInfo[0].strip().upper()
+            asList.append(areaSym)
+            asDict[areaSym] = survey
+
+        asList.sort()
+
+        arcpy.SetProgressor("step", "Downloading SSURGO data...",  0, len(asList), 1)
+
+        # Proccess list of areasymbols
+        #
+        for areaSym in asList:
+            # Run import process in order of listed Areasymbol values
+            iGet += 1
+
+            # Run import process
+            iTotal = len(asList)
+            arcpy.SetProgressorLabel("Downloading survey " + areaSym + " from Web Soil Survey  (number " + str(iGet) + " of " + str(len(asList)) + " total)")
+            bProcessed = ProcessSurvey(outputFolder, importDB, areaSym, bImport, bRemoveTXT, iGet, iTotal)
+
+            if bProcessed == "Failed":
+                failedList.append(areaSym)
+                failedCnt += 1
+
+            elif bProcessed == "Skipped":
+                skippedList.append(areaSym)
+
+            elif bProcessed == "Successful":
+                # download successful
+                failedCnt = 0
+                goodList.append(areaSym)
+
+            if failedCnt > 4:
+                AddMsgAndPrint("Five consecutive download failures, bailing out",2)
+                exit()
+
+            if len(failedList) > 24:
+                AddMsgAndPrint("Twenty-five download failures, bailing out",2)
+                exit()
+
+            arcpy.SetProgressorPosition()
+
+        if len(failedList) > 0 or len(skippedList) > 0:
+            AddMsgAndPrint(" \nDownload process completed (" + Number_Format(len(goodList), 0, True) + " succeeded) with the following issues...", 1)
+
+        else:
+            if importDB:
+                AddMsgAndPrint(" \nAll " + Number_Format(len(asList), 0, True) + " surveys succcessfully downloaded, tabular import process complete", 0)
+
+            else:
+                AddMsgAndPrint(" \nAll " + Number_Format(len(asList), 0, True) + " surveys succcessfully downloaded (no tabular import)", 0)
+
+        arcpy.SetProgressorLabel("Processing complete...")
+        env.workspace = outputFolder
+
+    except:
+        errorMsg()
+
+    finally:
+        if len(failedList) > 0:
+            AddMsgAndPrint(" \n\tWSS download failed for: " + ", ".join(failedList), 2)
+
+        if len(skippedList) > 0:
+            AddMsgAndPrint(" \n\tSkipped because a current version already exists: " + ", ".join(skippedList), 1)
