@@ -1,5 +1,15 @@
-# SSURGO_BatchDownload.py
-#
+# ---------------------------------------------------------------------------
+# SSURGO_BatchDownload_byRegion.py
+# Created on: 01-09-2014
+
+# Author: Adolfo.Diaz
+#         GIS Specialist
+#         National Soil Survey Center
+#         USDA - NRCS
+# e-mail: adolfo.diaz@usda.gov
+# phone: 608.662.4422 ext. 216
+
+# ---------------------------------------------------------------------------
 # Download the most current SSURGO data from Web Soil Survey by Soil Survey Region.  A buffer of
 # about 2 surveys around the region will be included.  This tool will normally be used in conjunction
 # with the "Create Regional Spatial Geodatabase" tool.
@@ -14,36 +24,57 @@
 #
 # The unzipped folder will be renamed to match the NRCS Geodata naming convention for soils. i.e soils_wi025
 #
-#
-# 01-09-2014
-# Steve Peaslee and Adolfo Diaz
-#
 # Updated: 2016-12-16 Converted the SOAP request to POST-REST request to SDaccess. -- AD
+
+# ==========================================================================================
+# Updated  3/15/2021 - Adolfo Diaz
+#
+# - All urllib libraries were updated to reflect python 3.6 protocols
+# - Updated and Tested for ArcGIS Pro 2.5.2 and python 3.6
+# - All describe functions use the arcpy.da.Describe functionality.
+# - All intermediate datasets are written to "in_memory" instead of written to a FGDB and
+#   and later deleted.  This avoids having to check and delete intermediate data during every
+#   execution.
+# - All cursors were updated to arcpy.da
+# - Added code to remove layers from an .aprx rather than simply deleting them
+# - Updated AddMsgAndPrint to remove ArcGIS 10 boolean and gp function
+# - Updated errorMsg() Traceback functions slightly changed for Python 3.6.
+# - Added parallel processing factor environment
+# - swithced from sys.exit() to exit()
+# - All gp functions were translated to arcpy
+# - Every function including main is in a try/except clause
+# - Main code is wrapped in if __name__ == '__main__': even though script will never be
+#   used as independent library.
+# - Normal messages are no longer Warnings unnecessarily.
 
 ## ===================================================================================
 def errorMsg():
+    try:
 
-    tb = sys.exc_info()[2]
-    l = traceback.format_tb(tb)
-    l.reverse()
-    tbinfo = "".join(l)
-    AddMsgAndPrint("\n\n----------ERROR Start-------------------",2)
-    AddMsgAndPrint("Traceback Info: \n" + tbinfo + "Error Info: \n    " +  str(sys.exc_type)+ ": " + str(sys.exc_value) + "",2)
-    AddMsgAndPrint("----------ERROR End-------------------- \n",2)
+        exc_type, exc_value, exc_traceback = sys.exc_info()
+        theMsg = "\t" + traceback.format_exception(exc_type, exc_value, exc_traceback)[1] + "\n\t" + traceback.format_exception(exc_type, exc_value, exc_traceback)[-1]
+
+        if theMsg.find("exit") > -1:
+            AddMsgAndPrint("\n\n")
+            pass
+        else:
+            AddMsgAndPrint(theMsg,2)
+
+    except:
+        AddMsgAndPrint("Unhandled error in unHandledException method", 2)
+        pass
 
 ## ================================================================================================================
 def AddMsgAndPrint(msg, severity=0):
     # prints message to screen if run as a python script
     # Adds tool message to the geoprocessor
     #
-    # Split the message on \n first, so that if it's multiple lines, a GPMessage will be added for each line
-
+    #Split the message on \n first, so that if it's multiple lines, a GPMessage will be added for each line
     try:
 
-        #print msg
+        print(msg)
         #for string in msg.split('\n'):
-
-        # Add a geoprocessing message (in case this is run as a tool)
+            #Add a geoprocessing message (in case this is run as a tool)
         if severity == 0:
             arcpy.AddMessage(msg)
 
@@ -51,11 +82,11 @@ def AddMsgAndPrint(msg, severity=0):
             arcpy.AddWarning(msg)
 
         elif severity == 2:
-            arcpy.AddMessage("    ")
-            arcpy.AddError(msg)
+            arcpy.AddError("\n" + msg)
 
     except:
         pass
+
 ## ===================================================================================
 def Number_Format(num, places=0, bCommas=True):
 # Format a number according to locality and given places
@@ -107,8 +138,6 @@ def getRegionalAreaSymbolList(ssaTable, masterTable, userRegionChoice):
 ## ===================================================================================
 def getSDMaccessDict(areaSymbol):
 
-    import httplib
-
     try:
 
         # Create empty list that will contain list of 'Areasymbol, AreaName
@@ -117,8 +146,7 @@ def getSDMaccessDict(areaSymbol):
         #sQuery = "SELECT AREASYMBOL, AREANAME, CONVERT(varchar(10), [SAVEREST], 126) AS SAVEREST FROM SASTATUSMAP WHERE AREASYMBOL LIKE '" + areaSymbol + "' AND SAPUBSTATUSCODE = 2 ORDER BY AREASYMBOL"
         sQuery = "SELECT AREASYMBOL, AREANAME, CONVERT(varchar(10), [SAVEREST], 126) AS SAVEREST FROM SASTATUSMAP WHERE AREASYMBOL LIKE '" + areaSymbol + "' ORDER BY AREASYMBOL"
 
-        theURL = "https://sdmdataaccess.nrcs.usda.gov"
-        url = theURL + "/Tabular/SDMTabularService/post.rest"
+        url = "https://sdmdataaccess.nrcs.usda.gov/Tabular/SDMTabularService/post.rest"
 
         # Create request using JSON, return data as JSON
         dRequest = dict()
@@ -127,9 +155,10 @@ def getSDMaccessDict(areaSymbol):
         jData = json.dumps(dRequest)  # {"QUERY": "SELECT AREASYMBOL, AREANAME, CONVERT(varchar(10), [SAVEREST], 126) AS SAVEREST FROM SASTATUSMAP WHERE AREASYMBOL LIKE \'WI025\' ORDER BY AREASYMBOL", "FORMAT": "JSON"}
 
         # Send request to SDA Tabular service using urllib2 library
-        req = urllib2.Request(url, jData)
-        resp = urllib2.urlopen(req)
-        jsonString = resp.read()      # {"Table":[["WI025","Dane County, Wisconsin","2016-09-27"]]}
+        jData = jData.encode('ascii')
+        response = urllib.request.urlopen(url, jData)
+
+        jsonString = response.read()      # {"Table":[["WI025","Dane County, Wisconsin","2016-09-27"]]}
 
         # Convert the returned JSON string into a Python dictionary.
         data = json.loads(jsonString)  # {u'Table': [[u'WI025', u'Dane County, Wisconsin', u'2016-09-27']]}
@@ -139,8 +168,6 @@ def getSDMaccessDict(areaSymbol):
         date = data['Table'][0][2]
 
         sdmAccessDict[areaSymbol] = (areasym + "|" + str(date) + "|" + areaname)
-
-        del sQuery,theURL,url,dRequest,jData,req,resp,jsonString,data,areasym,areaname,date
 
         return sdmAccessDict
 
@@ -225,9 +252,8 @@ def getSDMaccessDict(areaSymbol):
 ##                # then reformat to match SQL query
 ##                date = str(rec.text).split(" ")[0]
 
-    except urllib2.HTTPError:
-        errorMsg()
-        AddMsgAndPrint(" \n" + sQuery, 1)
+    except HTTPError as e:
+        AddMsgAndPrint('HTTP Error' + str(e),2)
         return ""
 
     except:
@@ -298,21 +324,18 @@ def GetDownload(areasym, surveyDate):
                 del request, local_zip, output, attempts, zipName1, zipName2, zipURL1, zipURL2
                 return zipName
 
-            except HTTPError, e:
+
+            except HTTPError as e:
                 AddMsgAndPrint("\t" + areaSym + " encountered HTTP Error (" + str(e.code) + ")", 2)
-                sleep(i * 3)
 
-            except URLError, e:
+            except URLError as e:
                 AddMsgAndPrint("\t" + areaSym + " encountered URL Error: " + str(e.reason), 2)
-                sleep(i * 3)
 
-            except socket.timeout, e:
+            except socket.timeout as e:
                 AddMsgAndPrint("\t" + areaSym + " encountered server timeout error", 2)
-                sleep(i * 3)
 
-            except socket.error, e:
+            except socket.error as e:
                 AddMsgAndPrint("\t" + areasym + " encountered Web Soil Survey connection failure", 2)
-                sleep(i * 3)
 
             except:
                 # problem deleting partial zip file after connection error?
@@ -329,8 +352,9 @@ def GetDownload(areasym, surveyDate):
         return ""
 ## =====================================  MAIN BODY    ==============================================
 # Import system modules
-import arcpy, sys, os, locale, string, traceback, shutil, zipfile, glob, socket, json,urllib2
-from urllib2 import urlopen, URLError, HTTPError
+import arcpy, sys, os, locale, string, traceback, shutil, zipfile, glob, socket, json, urllib
+from urllib.request import Request, urlopen, URLError, HTTPError
+#from urllib2 import urlopen, URLError, HTTPError
 from arcpy import env
 from time import sleep
 
@@ -338,7 +362,8 @@ if __name__ == '__main__':
 
     try:
         #--------------------------------------------------------------------------------------------Set Parameters
-        arcpy.OverwriteOutput = True
+        arcpy.env.parallelProcessingFactor = "75%"
+        arcpy.env.overwriteOutput = True
 
         # Script arguments...
         regionChoice = arcpy.GetParameterAsText(0)  # User selects what region to download
@@ -505,7 +530,8 @@ if __name__ == '__main__':
                             continue
 
                 # download zip file again if this is first error
-                except (zipfile.BadZipfile, zipfile.LargeZipFile), e:
+                except zipfile.BadZipfile:
+                    AddMsgAndPrint("Bad zip file?", 2)
                     pass
 
                 except:
