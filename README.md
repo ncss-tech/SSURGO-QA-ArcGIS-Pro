@@ -5,7 +5,7 @@ Official ArcGIS Pro version of the Quality Assurance tools used to certify SSURG
 
 Toolset|Tool|ArcGIS Pro Compatible|
 --------------------------------------------------|-------------------------------------------------------------------|---------------------------|
-Setup|Download SSURGO by Areasymbol||
+Setup|Download SSURGO by Areasymbol|X|
 Setup|Download SSURGO by Region||
 Setup|Generate Regional Transactional Geodatabase||
 Setup|Import SSURGO Datasets into FGDB by Map||
