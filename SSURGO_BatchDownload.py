@@ -1,7 +1,23 @@
+# ---------------------------------------------------------------------------
 # SSURGO_BatchDownload.py
-#
+# Created on: 10-31-2013
+
+# Author: Steve.Peaslee
+#         GIS Specialist
+#         National Soil Survey Center
+#         USDA - NRCS
+# e-mail: adolfo.diaz@usda.gov
+# phone: 608.662.4422 ext. 216
+
+# Author: Adolfo.Diaz
+#         GIS Specialist
+#         National Soil Survey Center
+#         USDA - NRCS
+# e-mail: adolfo.diaz@usda.gov
+# phone: 608.662.4422 ext. 216
+
+# ==========================================================================================
 # Download SSURGO data from Web Soil Survey
-#
 # Uses Soil Data Access query to generate choicelist and URLs for each survey
 #
 # Three different tools call this script. One tool uses an Areasymbol wildcard to
@@ -22,6 +38,7 @@
 # 2 = has both ordinary and NOTCOM mapunits
 # 3 = has only NOTCOM mapunits
 # 4 = has no mapunits at all
+# ==========================================================================================
 #
 # 10-31-2013
 # 11-22-2013
@@ -65,9 +82,30 @@
 # 2015-10-20 Added MUNAME, FARMLNDCL as an option
 # 2015-10-20 Changed tabular import to truncate any values that exceed the field length (MUNAME Problem)
 # ID604, ID670, WA651
-#
-# 2016-12-16 Converted the SOAP request to POST-REST request to SDaccess.  A.D.
 
+# ==========================================================================================
+# Updated  12/16/2016 - Adolfo Diaz
+# Converted the SOAP request to POST-REST request to SDaccess.  A.D.
+
+# ==========================================================================================
+# Updated  3/15/2021 - Adolfo Diaz
+#
+# - Updated and Tested for ArcGIS Pro 2.5.2 and python 3.6
+# - All describe functions use the arcpy.da.Describe functionality.
+# - All intermediate datasets are written to "in_memory" instead of written to a FGDB and
+#   and later deleted.  This avoids having to check and delete intermediate data during every
+#   execution.
+# - All cursors were updated to arcpy.da
+# - Added code to remove layers from an .aprx rather than simply deleting them
+# - Updated AddMsgAndPrint to remove ArcGIS 10 boolean and gp function
+# - Updated errorMsg() Traceback functions slightly changed for Python 3.6.
+# - Added parallel processing factor environment
+# - swithced from sys.exit() to exit()
+# - All gp functions were translated to arcpy
+# - Every function including main is in a try/except clause
+# - Main code is wrapped in if __name__ == '__main__': even though script will never be
+#   used as independent library.
+# - Normal messages are no longer Warnings unnecessarily.
 
 # ===============================================================================================================
 def AddMsgAndPrint(msg, severity=0):
@@ -967,7 +1005,7 @@ def ImportTabular(areaSym, newFolder, importDB, newDB, bRemoveTXT):
                     # counter for current record number
                     iRows = 1
                     fldLengths = list()
-                    fldList = arcpy.Describe(tbl).fields
+                    fldList = arcpy.da.Describe(tbl)['fields']
 
                     for fld in fldList:
                         if fld.type != "OID":
@@ -1259,7 +1297,6 @@ if __name__ == '__main__':
         arcpy.SetProgressor("step", "Downloading SSURGO data...",  0, len(asList), 1)
 
         # Proccess list of areasymbols
-        #
         for areaSym in asList:
             # Run import process in order of listed Areasymbol values
             iGet += 1
