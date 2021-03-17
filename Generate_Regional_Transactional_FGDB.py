@@ -11,31 +11,34 @@
 #
 # Last Modified:  10/24/2017
 
-## ===================================================================================
-def print_exception():
+## ================================================================================================================
+def errorMsg():
+    try:
 
-    tb = sys.exc_info()[2]
-    l = traceback.format_tb(tb)
-    l.reverse()
-    tbinfo = "".join(l)
-    AddMsgAndPrint("\n\n----------ERROR Start-------------------",2)
-    AddMsgAndPrint("Traceback Info: \n" + tbinfo + "Error Info: \n    " +  str(sys.exc_type)+ ": " + str(sys.exc_value) + "",2)
-    AddMsgAndPrint("----------ERROR End-------------------- \n\n",2)
+        exc_type, exc_value, exc_traceback = sys.exc_info()
+        theMsg = "\t" + traceback.format_exception(exc_type, exc_value, exc_traceback)[1] + "\n\t" + traceback.format_exception(exc_type, exc_value, exc_traceback)[-1]
+
+        if theMsg.find("exit") > -1:
+            AddMsgAndPrint("\n\n")
+            pass
+        else:
+            AddMsgAndPrint(theMsg,2)
+
+    except:
+        AddMsgAndPrint("Unhandled error in unHandledException method", 2)
+        pass
 
 ## ================================================================================================================
 def AddMsgAndPrint(msg, severity=0):
     # prints message to screen if run as a python script
     # Adds tool message to the geoprocessor
     #
-    # Split the message on \n first, so that if it's multiple lines, a GPMessage will be added for each line
-
-    #print msg
-
+    #Split the message on \n first, so that if it's multiple lines, a GPMessage will be added for each line
     try:
 
+        print(msg)
         #for string in msg.split('\n'):
-
-        # Add a geoprocessing message (in case this is run as a tool)
+            #Add a geoprocessing message (in case this is run as a tool)
         if severity == 0:
             arcpy.AddMessage(msg)
 
@@ -43,7 +46,7 @@ def AddMsgAndPrint(msg, severity=0):
             arcpy.AddWarning(msg)
 
         elif severity == 2:
-            arcpy.AddError(msg)
+            arcpy.AddError("\n" + msg)
 
     except:
         pass
@@ -74,7 +77,7 @@ def getRegionalAreaSymbolList(ssurgoSSApath, userRegionChoice):
         return areaSymbolList
 
     except:
-        print_exception
+        errorMsg()
         return ""
 
 ## ===================================================================================
@@ -201,7 +204,7 @@ def validateSSAs(surveyList, wssLibrary):
 
     except:
         AddMsgAndPrint("\nUnhandled exception (validateSSAs)", 2)
-        print_exception()
+        errorMsg()
         return ""
 
 ## ================================================================================================================
@@ -277,7 +280,7 @@ def createFGDB(regionChoice,outputFolder):
 
         arcpy.CreateFileGDB_management(outputFolder, newName + '.gdb')
         arcpy.ImportXMLWorkspaceDocument_management(targetGDB, xmlFile, "SCHEMA_ONLY", "DEFAULTS")
-        arcpy.RefreshCatalog(outputFolder)
+        #arcpy.RefreshCatalog(outputFolder)
 
         AddMsgAndPrint("\nSuccessfully Created RTSD File GDB: " + newName + ".gdb")
 
@@ -290,7 +293,7 @@ def createFGDB(regionChoice,outputFolder):
 
     except:
         AddMsgAndPrint("Unhandled exception (createFGDB)", 2)
-        print_exception()
+        errorMsg()
         return False
 
 ## ================================================================================================================
@@ -383,7 +386,7 @@ def parseDatumAndProjection(spatialReference):
 
     except:
         AddMsgAndPrint("\nUnhandled exception (parseDatumAndProjection)", 2)
-        print_exception()
+        errorMsg()
         return "",""
 
 ## ================================================================================================================
@@ -419,7 +422,7 @@ def compareDatum(fc):
         return False
 
     except:
-        print_exception()
+        errorMsg()
         return False
 
 ## ===============================================================================================================
@@ -431,7 +434,7 @@ def splitThousands(someNumber):
         return re.sub(r'(\d{3})(?=\d)', r'\1,', str(someNumber)[::-1])[::-1]
 
     except:
-        print_exception()
+        errorMsg()
         return someNumber
 
 ## ===============================================================================================================
@@ -484,12 +487,12 @@ def createTopology(RTSD_FD):
         arcpy.SetProgressorPosition()
         arcpy.ResetProgressor()
 
-        arcpy.RefreshCatalog(RTSD_FD)
+        #arcpy.RefreshCatalog(RTSD_FD)
         del newTopology
         return True
 
     except:
-        print_exception()
+        errorMsg()
         return False
 
 ## ===============================================================================================================
@@ -534,8 +537,8 @@ def ImportFeatureFiles(ssurgoDatasetDict):
                 if os.path.getsize(specFeatDescFile) > 0:
 
                     # Number of records in the feature file
-                    textFileRecords = sum(1 for row in csv.reader(open(specFeatDescFile, 'rb'), delimiter='|', quotechar='"'))
-                    F = csv.reader(open(specFeatDescFile, 'rb'), delimiter='|', quotechar='"')
+                    textFileRecords = sum(1 for row in csv.reader(open(specFeatDescFile, 'r'), delimiter='|', quotechar='"'))
+                    F = csv.reader(open(specFeatDescFile, 'r'), delimiter='|', quotechar='"')
 
                     i = 0 # row counter
                     for rowInF in F:
@@ -600,7 +603,7 @@ def ImportFeatureFiles(ssurgoDatasetDict):
         return False
 
     except:
-        print_exception()
+        errorMsg()
         return False
 
 ## ===============================================================================================================
@@ -656,7 +659,7 @@ def updateAliasNames(regionChoice,fdPath):
         return False
 
     except:
-        print_exception()
+        errorMsg()
         return False
 
 ## ===============================================================================================================
@@ -696,7 +699,7 @@ def addAttributeIndex(table,fieldList,verbose=True):
 
             # check existing indexes to see if fieldToIndex is already associated
             # with an index
-            if existingIndexes > 0:
+            if len(existingIndexes) > 0:
 
                 # iterate through the existing indexes looking for a field match
                 for index in existingIndexes:
@@ -728,7 +731,7 @@ def addAttributeIndex(table,fieldList,verbose=True):
                     AddMsgAndPrint("\tSuccessfully added attribute index for " + fieldToIndex)
 
     except:
-        print_exception()
+        errorMsg()
         return False
 
 
@@ -739,6 +742,9 @@ from arcpy import env
 from datetime import datetime
 
 if __name__ == '__main__':
+
+    arcpy.env.parallelProcessingFactor = "75%"
+    arcpy.env.overwriteOutput = True
 
     # ---------------------------------------------------------------------------------------Input Arguments
     # Parameter # 1: (Required) Name of new file geodatabase to create
@@ -966,11 +972,11 @@ if __name__ == '__main__':
             exit()
 
         # set progressor object which allows progress information to be passed for every merge complete
-        arcpy.SetProgressor("step", "Beginning the merge process...", 0, 6, 1)
-        AddMsgAndPrint("\n" + "Beginning the merge process",0)
+        arcpy.SetProgressor("step", "Beginning the append process...", 0, 6, 1)
+        AddMsgAndPrint("\n" + "Beginning the append process")
 
         # ------------------------------------------------------------------------------------------------ Merge Soil Mapunit Polygons
-        arcpy.SetProgressorLabel("Merging " + str(len(soilShpList)) + " Soil Mapunit Layers")
+        arcpy.SetProgressorLabel("Appending " + str(len(soilShpList)) + " Soil Mapunit Layers")
 
         try:
 ##            for field in soilsFM.fields:
@@ -981,7 +987,7 @@ if __name__ == '__main__':
             #arcpy.Merge_management(soilShpList, soilFCpath) #soilsFM)
             arcpy.Append_management(soilShpList, soilFCpath, "NO_TEST")
 
-            AddMsgAndPrint("\tSuccessfully merged SSURGO Soil Mapunit Polygons",0)
+            AddMsgAndPrint("\tSuccessfully appended SSURGO Soil Mapunit Polygons")
 
             if not addAttributeIndex(soilFCpath,["AREASYMBOL","MUSYM"],False): pass
 
@@ -994,7 +1000,7 @@ if __name__ == '__main__':
         muLineFCpath = os.path.join(FDpath, muLineFC)
         if len(muLineShpList) > 0:
 
-            arcpy.SetProgressorLabel("Merging " + str(len(muLineShpList)) + " SSURGO Soil Mapunit Line Layers")
+            arcpy.SetProgressorLabel("Appending " + str(len(muLineShpList)) + " SSURGO Soil Mapunit Line Layers")
 
             # Transactional FGDB; remove any field other than AREASYMBOL and MUSYM
 ##            for field in muLineFM.fields:
@@ -1004,11 +1010,11 @@ if __name__ == '__main__':
             #arcpy.Merge_management(muLineShpList, muLineFCpath) #muLineFM)
             arcpy.Append_management(muLineShpList, muLineFCpath, "NO_TEST")
 
-            AddMsgAndPrint("\tSuccessfully merged SSURGO Soil Mapunit Lines",0)
+            AddMsgAndPrint("\tSuccessfully appended SSURGO Soil Mapunit Lines")
             if not addAttributeIndex(muLineFCpath,["AREASYMBOL","MUSYM"],False): pass
 
         else:
-            AddMsgAndPrint("\tNo SSURGO Soil Mapunit Lines to merge",0)
+            AddMsgAndPrint("\tNo SSURGO Soil Mapunit Lines to merge")
 
         arcpy.SetProgressorPosition()
 
@@ -1016,7 +1022,7 @@ if __name__ == '__main__':
         muPointFCpath = os.path.join(FDpath, muPointFC)
         if len(muPointShpList) > 0:
 
-            arcpy.SetProgressorLabel("Merging " + str(len(muPointShpList)) + "SSURGO Soil Mapunit Point Layers")
+            arcpy.SetProgressorLabel("Appending " + str(len(muPointShpList)) + "SSURGO Soil Mapunit Point Layers")
 
             # Transactional FGDB; remove any field other than AREASYMBOL and MUSYM
 ##            for field in muPointFM.fields:
@@ -1026,16 +1032,16 @@ if __name__ == '__main__':
             #arcpy.Merge_management(muPointShpList, muPointFCpath) #muPointFM)
             arcpy.Append_management(muPointShpList, muPointFCpath, "NO_TEST")
 
-            AddMsgAndPrint("\tSuccessfully merged SSURGO Soil Mapunit Points",0)
+            AddMsgAndPrint("\tSuccessfully appended SSURGO Soil Mapunit Points")
             if not addAttributeIndex(muPointFCpath,["AREASYMBOL","MUSYM"],False): pass
 
         else:
-            AddMsgAndPrint("\tNo SSURGO Soil Mapunit Points to merge",0)
+            AddMsgAndPrint("\tNo SSURGO Soil Mapunit Points to merge")
 
         arcpy.SetProgressorPosition()
 
         # ---------------------------------------------------------------------------------------------- Merge Soil Survey Area
-        arcpy.SetProgressorLabel("Merging " + str(len(soilSaShpList)) + " SSURGO Soil Survey Area Layers")
+        arcpy.SetProgressorLabel("Appending " + str(len(soilSaShpList)) + " SSURGO Soil Survey Area Layers")
 
         # Transactional FGDB; remove any field other than AREASYMBOL and MUSYM
 ##        for field in soilSaFM.fields:
@@ -1046,7 +1052,7 @@ if __name__ == '__main__':
         #arcpy.Merge_management(soilSaShpList, soilSaFCpath, soilSaFM)
         arcpy.Append_management(soilSaShpList, soilSaFCpath, "NO_TEST")
 
-        AddMsgAndPrint("\tSuccessfully merged SSURGO Soil Survey Area Polygons",0)
+        AddMsgAndPrint("\tSuccessfully appended SSURGO Soil Survey Area Polygons")
         if not addAttributeIndex(soilSaFCpath,["AREASYMBOL"],False): pass
 
         arcpy.SetProgressorPosition()
@@ -1055,7 +1061,7 @@ if __name__ == '__main__':
         featPointFCpath = os.path.join(FDpath, featPointFC)
         if len(featPointShpList) > 0:
 
-            arcpy.SetProgressorLabel("Merging " + str(len(featPointShpList)) + " SSURGO Special Point Feature Layers")
+            arcpy.SetProgressorLabel("Appending " + str(len(featPointShpList)) + " SSURGO Special Point Feature Layers")
 
             # Transactional FGDB; remove any field other than AREASYMBOL and FEATSYM
 ##            for field in featPointFM.fields:
@@ -1065,11 +1071,11 @@ if __name__ == '__main__':
             #arcpy.Merge_management(featPointShpList, featPointFCpath)# featPointFM)
             arcpy.Append_management(featPointShpList, featPointFCpath, "NO_TEST")
 
-            AddMsgAndPrint("\tSuccessfully merged SSURGO Special Point Features",0)
+            AddMsgAndPrint("\tSuccessfully appended SSURGO Special Point Features")
             if not addAttributeIndex(featPointFCpath,["AREASYMBOL", "FEATSYM"],False): pass
 
         else:
-            AddMsgAndPrint("\tNo SSURGO Soil Special Point Features to merge",0)
+            AddMsgAndPrint("\tNo SSURGO Soil Special Point Features to merge")
 
         arcpy.SetProgressorPosition()
 
@@ -1077,7 +1083,7 @@ if __name__ == '__main__':
         featLineFCpath = os.path.join(FDpath, featLineFC)
         if len(featLineShpList) > 0:
 
-            arcpy.SetProgressorLabel("Merging " + str(len(featLineShpList)) + " SSURGO Special Line Feature Layers")
+            arcpy.SetProgressorLabel("Appending " + str(len(featLineShpList)) + " SSURGO Special Line Feature Layers")
 
             # Transactional FGDB; remove any field other than AREASYMBOL and FEATSYM
 ##            for field in featLineFM.fields:
@@ -1087,11 +1093,11 @@ if __name__ == '__main__':
             #arcpy.Merge_management(featLineShpList, featLineFCpath)# featLineFM)
             arcpy.Append_management(featLineShpList, featLineFCpath, "NO_TEST")
 
-            AddMsgAndPrint("\tSuccessfully merged SSURGO Special Line Features",0)
+            AddMsgAndPrint("\tSuccessfully appended SSURGO Special Line Features")
             if not addAttributeIndex(featLineFCpath,["AREASYMBOL", "FEATSYM"],False): pass
 
         else:
-            AddMsgAndPrint("\tNo SSURGO Special Line Features to merge",0)
+            AddMsgAndPrint("\tNo SSURGO Special Line Features to merge")
 
         arcpy.SetProgressorPosition()
         arcpy.ResetProgressor()
@@ -1141,7 +1147,7 @@ if __name__ == '__main__':
         AddMsgAndPrint("\tTotal # of Special Feature Points: " + str(splitThousands(arcpy.GetCount_management(FDpath + os.sep + featPointFC).getOutput(0))),1)
         AddMsgAndPrint("\tTotal # of Special Feature Lines: " + str(splitThousands(arcpy.GetCount_management(FDpath + os.sep + featLineFC).getOutput(0))),1)
 
-        arcpy.RefreshCatalog(outputFolder)
+        #arcpy.RefreshCatalog(outputFolder)
 
         endTime = datetime.now()
         AddMsgAndPrint("\nTotal Time: " + str(endTime - startTime),0)
@@ -1151,4 +1157,4 @@ if __name__ == '__main__':
         AddMsgAndPrint(arcpy.GetMessages(2),2)
 
     except:
-        print_exception()
+        errorMsg()

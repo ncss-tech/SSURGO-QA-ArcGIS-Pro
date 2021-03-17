@@ -391,9 +391,9 @@ if __name__ == '__main__':
             AddMsgAndPrint("\nNo Areasymbols were selected. Possible problem with table",2)
             exit()
 
-        AddMsgAndPrint("\n\n" + str(len(asList)) + " SSURGO Dataset(s) will be downloaded for " + regionChoice, 1)
-        AddMsgAndPrint("\tNumber of Soil Survey Areas assigned to " + regionChoice + ": " + str(numOfRegionalSSA),1)
-        AddMsgAndPrint("\tNumber of Additional SSAs to be downloaded for the use of static datasets: " + str(len(asList) - numOfRegionalSSA),1)
+        AddMsgAndPrint("\n\n" + str(len(asList)) + " SSURGO Dataset(s) will be downloaded for " + regionChoice)
+        AddMsgAndPrint("\tNumber of Soil Survey Areas assigned to " + regionChoice + ": " + str(numOfRegionalSSA))
+        AddMsgAndPrint("\tNumber of Additional SSAs to be downloaded for the use of static datasets: " + str(len(asList) - numOfRegionalSSA))
 
         failedList = list()  # track list of failed downloads
 
@@ -406,7 +406,7 @@ if __name__ == '__main__':
 
         for SSA in asList:
 
-            AddMsgAndPrint("\nAttempting connection and download for: " + SSA,1)
+            AddMsgAndPrint("\nAttempting connection and download for: " + SSA)
 
             iGet += 1
 
@@ -504,13 +504,13 @@ if __name__ == '__main__':
                             try:
                                 if len(shpList) == 1:
                                     muShp = shpList[0]
-                                    AddMsgAndPrint("\t\tImporting metadata for " + muShp, 0)
+                                    AddMsgAndPrint("\t\tImporting metadata for " + muShp)
                                     metaData = os.path.join(newFolder, "soil_metadata_" + areaSym.lower() + ".xml")
                                     arcpy.ImportMetadata_conversion(metaData, "FROM_FGDC", os.path.join(spatialFolder, muShp), "ENABLED")
                                     del spatialFolder, muShp, metaData
 
                             except:
-                                AddMsgAndPrint("\t\tImporting metadata for " + muShp + " Failed.  ", 0)
+                                AddMsgAndPrint("\t\tImporting metadata for " + muShp + " Failed.  ", 2)
                                 pass
 
                             # end of successful zip file download
@@ -550,7 +550,7 @@ if __name__ == '__main__':
             AddMsgAndPrint("\tThese surveys failed to download properly: " + ", ".join(failedList),2)
 
         else:
-            AddMsgAndPrint("\nAll SSURGO datasets downloaded successfully\n", 0)
+            AddMsgAndPrint("\nAll SSURGO datasets downloaded successfully\n")
 
         arcpy.SetProgressorLabel("Processing complete...")
         env.workspace = outputFolder
