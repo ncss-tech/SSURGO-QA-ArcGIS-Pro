@@ -7,7 +7,7 @@ Toolset|Tool|ArcGIS Pro Compatible|
 --------------------------------------------------|-------------------------------------------------------------------|---------------------------|
 Setup|Download SSURGO by Areasymbol|X|
 Setup|Download SSURGO by Region|X|
-Setup|Generate Regional Transactional Geodatabase||
+Setup|Generate Regional Transactional Geodatabase|X|
 Setup|Import SSURGO Datasets into FGDB by Map||
 Setup|Import SSURGO or STATSGO Datasets into FGDB||
 Setup|Insert NATSYM and MUNAME Value||
