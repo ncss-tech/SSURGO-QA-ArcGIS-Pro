@@ -1,15 +1,35 @@
 # Create_Regional_Transactional_FGDB
-#
-# 1/16/2014
-#
-# Adolfo Diaz, Region 10 GIS Specialist
-# USDA - Natural Resources Conservation Service
-# Madison, WI 53719
-# adolfo.diaz@wi.usda.gov
-# 608.662.4422 ext. 216
-#
+# Created on: 1/16/2014
+
+# Author: Adolfo.Diaz
+#         GIS Specialist
+#         National Soil Survey Center
+#         USDA - NRCS
+# e-mail: adolfo.diaz@usda.gov
+# phone: 608.662.4422 ext. 216
 #
 # Last Modified:  10/24/2017
+
+# Updated  10/27/2020 - Adolfo Diaz
+
+# ==========================================================================================
+# Updated  3/17/2020 - Adolfo Diaz
+# - Updated and Tested for ArcGIS Pro 2.5.2 and python 3.6
+# - All describe functions use the arcpy.da.Describe functionality.
+# - All intermediate datasets are written to "in_memory" instead of written to a FGDB and
+#   and later deleted.  This avoids having to check and delete intermediate data during every
+#   execution.
+# - All cursors were updated to arcpy.da
+# - Added code to remove layers from an .aprx rather than simply deleting them
+# - Updated AddMsgAndPrint to remove ArcGIS 10 boolean and gp function
+# - Updated errorMsg() Traceback functions slightly changed for Python 3.6.
+# - Added parallel processing factor environment
+# - swithced from sys.exit() to exit()
+# - All gp functions were translated to arcpy
+# - Every function including main is in a try/except clause
+# - Main code is wrapped in if __name__ == '__main__': even though script will never be
+#   used as independent library.
+# - Normal messages are no longer Warnings unnecessarily.
 
 ## ================================================================================================================
 def errorMsg():
@@ -556,8 +576,8 @@ def ImportFeatureFiles(ssurgoDatasetDict):
 
                     if i != textFileRecords:
                         AddMsgAndPrint("\tIncorrect # of records inserted for " + SSA,2)
-                        AddMsgAndPrint( "\t\tFeature file records: " + str(textFileRecords),2)
-                        AddMsgAndPrint( "\t\tRecords Inserted: " + str(i),2)
+                        AddMsgAndPrint("\t\tFeature file records: " + str(textFileRecords),2)
+                        AddMsgAndPrint("\t\tRecords Inserted: " + str(i),2)
                         importError.append(SSA)
 
                     else:
