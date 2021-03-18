@@ -9,7 +9,7 @@ Setup|Download SSURGO by Areasymbol|X|
 Setup|Download SSURGO by Region|X|
 Setup|Generate Regional Transactional Geodatabase|X|
 Setup|Import SSURGO Datasets into FGDB by Map||
-Setup|Import SSURGO or STATSGO Datasets into FGDB||
+Setup|Import SSURGO or STATSGO Datasets into FGDB|X|
 Setup|Insert NATSYM and MUNAME Value||
 Quality Assurance|Check Attributes|X|
 Quality Assurance|Compare Spatial-NASIS Mapunits|X|
