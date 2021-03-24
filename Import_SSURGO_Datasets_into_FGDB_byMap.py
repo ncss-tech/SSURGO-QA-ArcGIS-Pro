@@ -127,16 +127,22 @@
 #
 # Last Modified:  10/24/2017
 
-## ===================================================================================
-def print_exception():
+## ================================================================================================================
+def errorMsg():
+    try:
 
-    tb = sys.exc_info()[2]
-    l = traceback.format_tb(tb)
-    l.reverse()
-    tbinfo = "".join(l)
-    AddMsgAndPrint("\n\n----------ERROR Start-------------------",2)
-    AddMsgAndPrint("Traceback Info: \n" + tbinfo + "Error Info: \n    " +  str(sys.exc_type)+ ": " + str(sys.exc_value) + "",2)
-    AddMsgAndPrint("----------ERROR End-------------------- \n",2)
+        exc_type, exc_value, exc_traceback = sys.exc_info()
+        theMsg = "\t" + traceback.format_exception(exc_type, exc_value, exc_traceback)[1] + "\n\t" + traceback.format_exception(exc_type, exc_value, exc_traceback)[-1]
+
+        if theMsg.find("exit") > -1:
+            AddMsgAndPrint("\n\n")
+            pass
+        else:
+            AddMsgAndPrint(theMsg,2)
+
+    except:
+        AddMsgAndPrint("Unhandled error in unHandledException method", 2)
+        pass
 
 ## ================================================================================================================
 def AddMsgAndPrint(msg, severity=0):
@@ -145,15 +151,13 @@ def AddMsgAndPrint(msg, severity=0):
     #
     # Split the message on \n first, so that if it's multiple lines, a GPMessage will be added for each line
 
-    #print msg
+    #print(msg)
 
     try:
 
         f = open(textFilePath,'a+')
         f.write(msg + "\n")
         f.close
-
-        #for string in msg.split('\n'):
 
         # Add a geoprocessing message (in case this is run as a tool)
         if severity == 0:
@@ -171,7 +175,7 @@ def AddMsgAndPrint(msg, severity=0):
 
 ## ================================================================================================================
 def compareDatum(fc):
-    # Return True if fc datum is either WGS84 or NAD83
+    """ Return True if fc datum is either WGS84 or NAD83"""
 
     try:
         # Create Spatial Reference of the input fc. It must first be converted in to string in ArcGIS10
@@ -189,26 +193,13 @@ def compareDatum(fc):
 
         # Input datum is either WGS84 or NAD83; return true
         if fc_datum == WGS84_datum or fc_datum == NAD83_datum:
-            del fcSpatialRef
-            del FCdatum_start
-            del FCdatum_stop
-            del fc_datum
-            del WGS84_sr
-            del WGS84_datum
-            del NAD83_datum
 
+            del fcSpatialRef,FCdatum_start,FCdatum_stop,fc_datum,WGS84_sr,WGS84_datum,NAD83_datum
             return True
 
         # Input Datum is some other Datum; return false
         else:
-            del fcSpatialRef
-            del FCdatum_start
-            del FCdatum_stop
-            del fc_datum
-            del WGS84_sr
-            del WGS84_datum
-            del NAD83_datum
-
+            del fcSpatialRef,FCdatum_start,FCdatum_stop,fc_datum,WGS84_sr,WGS84_datum,NAD83_datum
             return False
 
     except arcpy.ExecuteError:
@@ -216,14 +207,14 @@ def compareDatum(fc):
         return False
 
     except:
-        print_exception()
+        errorMsg()
         return False
 
 ## ================================================================================================================
 def createFGDB(GDBname,outputFolder,spatialRef):
-    # This function will Create a File Geodatabase.  A Feature Dataset will be created if b_FD = True.
-    # 6 feature classes will be created using the SSURGO schema.
-    # Return False if error occurs, True otherwise.
+    """ This function will Create a File Geodatabase.  A Feature Dataset will be created if b_FD = True.
+        6 feature classes will be created using the SSURGO schema.
+        Return False if error occurs, True otherwise. """
 
     try:
         newFGDBpath = os.path.join(outputFolder,GDBname + ".gdb")
@@ -246,7 +237,7 @@ def createFGDB(GDBname,outputFolder,spatialRef):
 
     except:
         AddMsgAndPrint("Unhandled exception (createFGDB)", 2)
-        print_exception()
+        errorMsg()
         return False
 
 ## ================================================================================================================
@@ -321,13 +312,13 @@ def createFeatureClasses(newFGDBpath,spatialRef):
 
     except:
         AddMsgAndPrint("Unhandled exception (createFeatureClasses)", 2)
-        print_exception()
+        errorMsg()
         return False
 ## ===============================================================================================================
 def GetTableAliases(ssurgoTemplateLoc, tblAliases):
-    # Retrieve physical and alias names from MDSTATTABS table and assigns them to a blank dictionary.
-    # Stores physical names (key) and aliases (value) in a Python dictionary i.e. {chasshto:'Horizon AASHTO,chaashto'}
-    # Fieldnames are Physical Name = AliasName,IEfilename
+    """ Retrieve physical and alias names from MDSTATTABS table and assigns them to a blank dictionary.
+        Stores physical names (key) and aliases (value) in a Python dictionary i.e. {chasshto:'Horizon AASHTO,chaashto'}
+        Fieldnames are Physical Name = AliasName,IEfilename"""
 
     try:
 
@@ -351,7 +342,7 @@ def GetTableAliases(ssurgoTemplateLoc, tblAliases):
                 # i.e. {chaashto:'Horizon AASHTO',chaashto}; will create a one-to-many dictionary
                 # As long as the physical name doesn't exist in dict() add physical name
                 # as Key and alias as Value.
-                if not tblAliases.has_key(physicalName):
+                if not physicalName in tblAliases:
                     tblAliases[physicalName] = (aliasName,importFileName)
 
                 del physicalName
@@ -376,17 +367,18 @@ def GetTableAliases(ssurgoTemplateLoc, tblAliases):
 
     except:
         AddMsgAndPrint("Unhandled exception (GetTableAliases)", 2)
-        print_exception()
+        errorMsg()
         return tblAliases
 
+
 ## ===============================================================================================================
-def importTabularData(tabularFolder, tblAliases):
-    # This function will import the SSURGO .txt files from the tabular folder.
-    # tabularFolder is the absolute path to the tabular folder.
-    # tblAliases is a list of the physical name of the .txt file along with the Alias name.
-    # Return False if error occurs, true otherwise.  there is a list of files that will not be
-    # imported under "doNotImport".  If the tabular folder is empty or there are no text files
-    # the survey will be skipped.
+def importTabularData(tabularFolder, tblAliases, queue):
+    """ This function will import the SSURGO .txt files from the tabular folder.
+        tabularFolder is the absolute path to the tabular folder.
+        tblAliases is a list of the physical name of the .txt file along with the Alias name.
+        Return False if error occurs, true otherwise.  there is a list of files that will not be
+        imported under "doNotImport".  If the tabular folder is empty or there are no text files
+        the survey will be skipped."""
 
     try:
         env.workspace = FGDBpath
@@ -395,12 +387,13 @@ def importTabularData(tabularFolder, tblAliases):
         # (iefilename) and key (tabphyname) in a list.  The list is then sorted
         # so that SSURGO text files can be imported in alphabetical sequence.
         GDBTables = tblAliases.keys()
-        GDBTables.sort()
+        #GDBTables.sort()
 
         # Do not import the following SSURGO text files.  Most are metadata text files that are
         # used within the access template and/or SDV.  No need to import them into GDB.
-        doNotImport = ["featline","featpoint","month","msdomdet","msdommas","msidxdet","msidxmas","msrsdet",
-                       "msrsmas","mstab","mstabcol","mupoint","muline","sapolygon""version"]
+##        doNotImport = ["msdomdet","msdommas","msidxdet","msidxmas","msrsdet",
+##                       "msrsmas","mstab","mstabcol","version"]
+        doNotImport = ["month"]
 
         # if the tabular directory is empty return False
         if len(os.listdir(tabularFolder)) < 1:
@@ -411,13 +404,18 @@ def importTabularData(tabularFolder, tblAliases):
         # that make up the tabular data set.
         mdstattabsTable = env.workspace + os.sep + "mdstattabs"
 
-        AddMsgAndPrint("\nImporting Tabular Data for: " + SSA,1)
+        AddMsgAndPrint("\n\tImporting Tabular Data for: " + SSA,0)
 
         # set progressor object which allows progress information to be passed for every merge complete
-        arcpy.SetProgressor("step", "Importing Tabular Data for " + SSA, 0, len(GDBTables), 1)
+        arcpy.SetProgressor("step", "Importing Tabular Data for " + SSA + ": " + str(queue) + ' of ' + str(total), 0, len(GDBTables), 1)
 
         # For each item in sorted keys
         for GDBtable in GDBTables:
+
+            # Metadata tables only have to be imported once b/c they are national tables.
+            if GDBtable.find('mds') > -1 or GDBtable.find('distinterpmd') > -1:
+                if int(arcpy.GetCount_management(os.path.join(FGDBpath,GDBtable)).getOutput(0)) > 0:
+                    continue
 
             # physicalName (tablabel,iefilename)
             # i.e. {chaashto:'Horizon AASHTO',chaashto}
@@ -447,8 +445,7 @@ def importTabularData(tabularFolder, tblAliases):
                     theAlias = theTab + "(" + aliasName + ")"
                     theRecLength = " " * (48 - len(aliasName))
 
-                    del theTabLength
-                    del theTab
+                    del theTabLength, theTab
 
                     # Continue if the text file contains values. Not Empty file
                     if os.path.getsize(txtPath) > 0:
@@ -462,7 +459,7 @@ def importTabularData(tabularFolder, tblAliases):
 
                             if field.type != "OID":
                                 nameOfFields.append(field.name)
-                                if field.type.lower() == "String":
+                                if field.type.lower() == "string":
                                     fldLengths.append(field.length)
                                 else:
                                     fldLengths.append(0)
@@ -471,20 +468,19 @@ def importTabularData(tabularFolder, tblAliases):
 
                         # The csv file might contain very huge fields, therefore increase the field_size_limit:
                         # Exception thrown with IL177 in legend.txt.  Not sure why, only 1 record was present
-                        csv.field_size_limit(sys.maxsize)
+                        #csv.field_size_limit(sys.maxsize)
 
                         # Number of records in the SSURGO text file
-                        textFileRecords = sum(1 for row in csv.reader(open(txtPath, 'rb'), delimiter='|', quotechar='"'))
+                        textFileRecords = sum(1 for row in csv.reader(open(txtPath, 'r'), delimiter='|', quotechar='"'))
 
                         # Initiate Cursor to add rows
                         cursor = arcpy.da.InsertCursor(GDBtable,nameOfFields)
 
                         # counter for number of records successfully added; used for reporting
                         numOfRowsAdded = 0
-                        reader = csv.reader(open(txtPath, 'rb'), delimiter='|', quotechar='"')
+                        reader = csv.reader(open(txtPath, 'r'), delimiter='|', quotechar='"')
 
                         try:
-
                             # Return a reader object which will iterate over lines in txtPath
                             for rowInFile in reader:
 
@@ -517,23 +513,23 @@ def importTabularData(tabularFolder, tblAliases):
                             AddMsgAndPrint("\n\t\tError inserting record in table: " + GDBtable,2)
                             AddMsgAndPrint("\t\t\tRecord # " + str(numOfRowsAdded + 1),2)
                             AddMsgAndPrint("\t\t\tValue: " + str(newRow),2)
-                            print_exception()
+                            errorMsg()
 
-                        AddMsgAndPrint("\t--> " + iefileName + theAlias + theRecLength + " Records Added: " + str(splitThousands(numOfRowsAdded)),0)
+                        AddMsgAndPrint("\t\t--> " + iefileName + theAlias + theRecLength + " Records Added: " + str(splitThousands(numOfRowsAdded)),0)
 
                         # compare the # of rows inserted with the number of valid rows in the text file.
                         if numOfRowsAdded != textFileRecords:
-                            AddMsgAndPrint( "\t\t\t Incorrect # of records inserted into: " + GDBtable, 2 )
-                            AddMsgAndPrint( "\t\t\t\t TextFile records: " + str(textFileRecords),2)
-                            AddMsgAndPrint( "\t\t\t\t Records Inserted: " + str(numOfRowsAdded),2)
+                            AddMsgAndPrint("\t\t\t Incorrect # of records inserted into: " + GDBtable, 2 )
+                            AddMsgAndPrint("\t\t\t\t TextFile records: " + str(textFileRecords),2)
+                            AddMsgAndPrint("\t\t\t\t Records Inserted: " + str(numOfRowsAdded),2)
 
                         del GDBtable, x, aliasName, iefileName, txtPath, theAlias, theRecLength, nameOfFields, textFileRecords, rowInFile, numOfRowsAdded, cursor, reader
 
                     else:
-                        AddMsgAndPrint("\t--> " + iefileName + theAlias + theRecLength + " Records Added: 0",0)
+                        AddMsgAndPrint("\t\t--> " + iefileName + theAlias + theRecLength + " Records Added: 0",0)
 
                 else:
-                    AddMsgAndPrint("\t--> " + iefileName + " does NOT exist tabular folder.....SKIPPING ",2)
+                    AddMsgAndPrint("\t\t--> " + iefileName + " does NOT exist in tabular folder.....SKIPPING ",2)
 
             arcpy.SetProgressorPosition()
 
@@ -550,23 +546,25 @@ def importTabularData(tabularFolder, tblAliases):
         AddMsgAndPrint("\tImporting Tabular Data Failed for: " + SSA,2)
         return False
 
-    except csv.Error, e:
+    except csv.Error as e:
         AddMsgAndPrint('\nfile %s, line %d: %s' % (txtPath, reader.line_num, e))
         AddMsgAndPrint("\tImporting Tabular Data Failed for: " + SSA,2)
-        print_exception()
+        errorMsg()
         return False
 
-    except IOError as (errno, strerror):
+    except IOError as e:
+        errno, strerror = e.args
         AddMsgAndPrint("\nI/O error({0}): {1}".format(errno, strerror) + " File: " + txtPath + "\n",2)
         AddMsgAndPrint("\tImporting Tabular Data Failed for: " + SSA,2)
-        print_exception()
+        errorMsg()
         return False
 
     except:
         AddMsgAndPrint("\nUnhandled exception (importTabularData) \n", 2)
         AddMsgAndPrint("\tImporting Tabular Data Failed for: " + SSA,2)
-        print_exception()
+        errorMsg()
         return False
+
 ## ===============================================================================================================
 def splitThousands(someNumber):
 # will determine where to put a thousands seperator if one is needed.
@@ -576,30 +574,30 @@ def splitThousands(someNumber):
         return re.sub(r'(\d{3})(?=\d)', r'\1,', str(someNumber)[::-1])[::-1]
 
     except:
-        print_exception()
+        errorMsg()
         return someNumber
 
 ## ===============================================================================================================
 def CreateTableRelationships(tblAliases):
-    # Create relationship classes between standalone attribute tables.
-    # Relate parameters are pulled from the mdstatrhipdet and mdstatrshipmas tables,
-    # thus it is required that the tables must have been copied from the template database.
+    """ Create relationship classes between standalone attribute tables.
+        Relate parameters are pulled from the mdstatrhipdet and mdstatrshipmas tables,
+        thus it is required that the tables must have been copied from the template database.
 
-    # Test option of getting aliases from original template database vs. output database
-    # set workspace to original template database
-    # env.workspace = InputDB
-    # or
-    # set workspace to output database.....This script uses output database as workspace
-    # WAIT, take that back.  Using the GDB as a workspace creates locks.  Specifically, the
-    # MakeQueryTable tool creates .rd and .sr locks that are only deleted if Arc is restarted.
-    # Currently use the ssurgoTemplate to create a query table so that it doesn't lock the .GDB
-    # Subfunction is written by Steve Peaslee and modified by Adolfo Diaz.
+        Test option of getting aliases from original template database vs. output database
+        set workspace to original template database
+        env.workspace = InputDB
+        or
+        set workspace to output database.....This script uses output database as workspace
+        WAIT, take that back.  Using the GDB as a workspace creates locks.  Specifically, the
+        MakeQueryTable tool creates .rd and .sr locks that are only deleted if Arc is restarted.
+        Currently use the ssurgoTemplate to create a query table so that it doesn't lock the .GDB
+        Subfunction is written by Steve Peaslee and modified by Adolfo Diaz. """
     #
     #Modified From Steve Peaslee's Setup_UpdateSurvey
     env.workspace = ssurgoTemplate
 
-    AddMsgAndPrint("\n-------------------------------------------------------------------------------------------------------",1)
-    AddMsgAndPrint("Verifying relationships:\n",1)
+    AddMsgAndPrint("\n------------------------------------------------------------------------------------------------------- ")
+    AddMsgAndPrint("Verifying relationships:\n")
 
     # set progressor object which allows progress information to be passed for every relationship complete
 
@@ -621,12 +619,18 @@ def CreateTableRelationships(tblAliases):
             #SQLtxt = "[" + fld1 + "] = [" + fld2 + "] AND [" + fld3 + "] = [" + fld4 + "] AND [" + fld5 + "] = [" + fld6 + "]"
 
             # Create in-memory table view to supply parameters for each relationshipclasses (using SSURGO 2.0 mdstatrshipdet and mdstatrshipmas tables)
-            inputTables = ssurgoTemplate + os.sep + "mdstatrshipdet;" + ssurgoTemplate + os.sep + "mdstatrshipmas"
+            inputTables = [ssurgoTemplate + os.sep + "mdstatrshipdet", ssurgoTemplate + os.sep + "mdstatrshipmas"]
             queryTableName = "RelshpInfo"
 
             # Use this one for env.workspace = FGDBpath: includes objectID but I don't think it is needed
             #fieldsList = "mdstatrshipdet.OBJECTID OBJECTID;mdstatrshipdet.ltabphyname LTABPHYNAME;mdstatrshipdet.rtabphyname RTABPHYNAME;mdstatrshipdet.relationshipname RELATIONSHIPNAME;mdstatrshipdet.ltabcolphyname LTABCOLPHYNAME;mdstatrshipdet.rtabcolphyname RTABCOLPHYNAME;mdstatrshipmas.cardinality CARDINALITY"
-            fieldsList = "mdstatrshipdet.ltabphyname LTABPHYNAME;mdstatrshipdet.rtabphyname RTABPHYNAME;mdstatrshipdet.relationshipname RELATIONSHIPNAME;mdstatrshipdet.ltabcolphyname LTABCOLPHYNAME;mdstatrshipdet.rtabcolphyname RTABCOLPHYNAME;mdstatrshipmas.cardinality CARDINALITY"
+            #fieldsList = "mdstatrshipdet.ltabphyname LTABPHYNAME;mdstatrshipdet.ltabcolphyname LTABCOLPHYNAME;mdstatrshipdet.rtabphyname RTABPHYNAME;mdstatrshipdet.rtabcolphyname RTABCOLPHYNAME;mdstatrshipdet.relationshipname RELATIONSHIPNAME;mdstatrshipmas.cardinality CARDINALITY"
+            fieldsList = [["mdstatrshipdet.ltabphyname", 'LTABPHYNAME'],
+                          ["mdstatrshipdet.ltabcolphyname", 'LTABCOLPHYNAME'],
+                          ["mdstatrshipdet.rtabphyname", 'RTABPHYNAME'],
+                          ["mdstatrshipdet.rtabcolphyname", 'RTABCOLPHYNAME'],
+                          ["mdstatrshipdet.relationshipname", 'RELATIONSHIPNAME'],
+                          ["mdstatrshipmas.cardinality", 'CARDINALITY']]
 
             arcpy.MakeQueryTable_management(inputTables, queryTableName, "NO_KEY_FIELD", "", fieldsList, SQLtxt)
 
@@ -637,98 +641,99 @@ def CreateTableRelationships(tblAliases):
             # Fields in RelshpInfo table view
             # OBJECTID, LTABPHYNAME, RTABPHYNAME, RELATIONSHIPNAME, LTABCOLPHYNAME, RTABCOLPHYNAME, CARDINALITY
             # Open table view and step through each record to retrieve relationshipclass parameters
-            rows = arcpy.SearchCursor(queryTableName)
 
             arcpy.SetProgressor("step", "Verifying Tabular Relationships", 0, int(arcpy.GetCount_management(ssurgoTemplate + os.sep + "mdstatrshipdet").getOutput(0)), 1)
             arcpy.SetProgressorLabel("Verifying Tabular Relationships")
 
             recNum = 0
-
             env.workspace = FGDBpath
 
-            for row in rows:
+            #['mdstatrshipdet_ltabphyname', 'mdstatrshipdet_ltabcolphyname', 'mdstatrshipdet_rtabphyname', 'mdstatrshipdet_rtabcolphyname', 'mdstatrshipdet_relationshipname', 'mdstatrshipmas_cardinality']
+            queryTableFlds = [f.name for f in arcpy.ListFields(queryTableName)]
+            #queryTableFlds.remove('OBJECTID')
 
-                # Get relationshipclass parameters from current table row
-                # Syntax for CreateRelationshipClass_management (origin_table, destination_table,
-                # out_relationship_class, relationship_type, forward_label, backward_label,
-                # message_direction, cardinality, attributed, origin_primary_key,
-                # origin_foreign_key, destination_primary_key, destination_foreign_key)
-                #
-                #AddMsgAndPrint("Reading record " + str(recNum), 1)
-                originTable = row.LTABPHYNAME
-                destinationTable = row.RTABPHYNAME
+            with arcpy.da.SearchCursor(queryTableName, queryTableFlds) as cursor:
+                for row in cursor:
 
-                originTablePath = FGDBpath + os.sep + row.LTABPHYNAME
-                destinationTablePath = FGDBpath + os.sep + row.RTABPHYNAME
+                    # Get relationshipclass parameters from current table row
+                    # Syntax for CreateRelationshipClass_management (origin_table, destination_table,
+                    # out_relationship_class, relationship_type, forward_label, backward_label,
+                    # message_direction, cardinality, attributed, origin_primary_key,
+                    # origin_foreign_key, destination_primary_key, destination_foreign_key)
+                    #
+                    #AddMsgAndPrint("Reading record " + str(recNum), 1)
+                    originTable = row[0]
+                    destinationTable = row[2]
 
-                # Use table aliases for relationship labels
-                relName = "x" + originTable.capitalize() + "_" + destinationTable.capitalize()
+                    originTablePath = FGDBpath + os.sep + originTable
+                    destinationTablePath = FGDBpath + os.sep + destinationTable
 
-                originPKey = row.LTABCOLPHYNAME
-                originFKey = row.RTABCOLPHYNAME
+                    # Use table aliases for relationship labels
+                    relName = "x" + originTable.capitalize() + "_" + destinationTable.capitalize()
 
-                # create Forward Label i.e. "> Horizon AASHTO Table"
-                if tblAliases.has_key(destinationTable):
-                    fwdLabel = "> " + tblAliases.get(destinationTable)[0] + " Table"
+                    originPKey = row[1]
+                    originFKey = row[3]
 
-                else:
-                    fwdLabel = destinationTable + " Table"
-                    AddMsgAndPrint("Missing key: " + destinationTable, 2)
-
-                # create Backward Label i.e. "< Horizon Table"
-                if tblAliases.has_key(originTable):
-                    backLabel = "<  " + tblAliases.get(originTable)[0] + " Table"
-
-                else:
-                    backLabel = "<  " + originTable + " Table"
-                    AddMsgAndPrint("Missing key: " + originTable, 2)
-
-                theCardinality = row.CARDINALITY.upper().replace(" ", "_")
-
-                # Check if origin and destination tables exist
-                if arcpy.Exists(originTablePath) and arcpy.Exists(destinationTablePath):
-
-                    # The following 6 lines are for formatting only
-                    formatTab1 = 15 - len(originTable)
-                    formatTabLength1 = " " * formatTab1 + "--> "
-
-                    formatTab2 = 19 - len(destinationTable)
-                    formatTabLength2 = " " * formatTab2 + "--> "
-
-                    formatTab3 = 12 - len(str(theCardinality))
-                    formatTabLength3 = " " * formatTab3 + "--> "
-
-                    # relationship already exists; print out the relationship name
-                    if arcpy.Exists(relName):
-                        AddMsgAndPrint("\t" + originTable +  formatTabLength1 + destinationTable + formatTabLength2 + theCardinality + formatTabLength3 + relName, 0)
-
-                    # relationship does not exist; create it and print out
+                    # create Forward Label i.e. "> Horizon AASHTO Table"
+                    if destinationTable in tblAliases:
+                        fwdLabel = "> " + tblAliases.get(destinationTable)[0] + " Table"
                     else:
-                        arcpy.CreateRelationshipClass_management(originTablePath, destinationTablePath, relName, "SIMPLE", fwdLabel, backLabel, "NONE", theCardinality, "NONE", originPKey, originFKey, "","")
-                        AddMsgAndPrint("\t" + originTable +  formatTabLength1 + destinationTable + formatTabLength2 + theCardinality + formatTabLength3 + relName, 0)
+                        fwdLabel = destinationTable + " Table"
+                        AddMsgAndPrint("Missing key: " + destinationTable, 2)
 
-                    # delete formatting variables
-                    del formatTab1, formatTabLength1, formatTab2, formatTabLength2, formatTab3, formatTabLength3
-                else:
-                    AddMsgAndPrint("        <-- " + relName + ": Missing input tables (" + originTable + " or " + destinationTable + ")", 0)
+                    # create Backward Label i.e. "< Horizon Table"
+                    if originTable in tblAliases:
+                        backLabel = "<  " + tblAliases.get(originTable)[0] + " Table"
 
-                del originTable, destinationTable, originTablePath, destinationTablePath, relName, originPKey, originFKey, fwdLabel, backLabel, theCardinality
+                    else:
+                        backLabel = "<  " + originTable + " Table"
+                        AddMsgAndPrint("Missing key: " + originTable, 2)
 
-                recNum = recNum + 1
+                    theCardinality = row[5].upper().replace(" ", "_")
 
-                arcpy.SetProgressorPosition() # Update the progressor position
+                    # Check if origin and destination tables exist
+                    if arcpy.Exists(originTablePath) and arcpy.Exists(destinationTablePath):
+
+                        # The following 6 lines are for formatting only
+                        formatTab1 = 15 - len(originTable)
+                        formatTabLength1 = " " * formatTab1 + "--> "
+
+                        formatTab2 = 19 - len(destinationTable)
+                        formatTabLength2 = " " * formatTab2 + "--> "
+
+                        formatTab3 = 12 - len(str(theCardinality))
+                        formatTabLength3 = " " * formatTab3 + "--> "
+
+                        # relationship already exists; print out the relationship name
+                        if arcpy.Exists(relName):
+                            AddMsgAndPrint("\t" + originTable +  formatTabLength1 + destinationTable + formatTabLength2 + theCardinality + formatTabLength3 + relName, 0)
+
+                        # relationship does not exist; create it and print out
+                        else:
+                            arcpy.CreateRelationshipClass_management(originTablePath, destinationTablePath, relName, "SIMPLE", fwdLabel, backLabel, "NONE", theCardinality, "NONE", originPKey, originFKey, "","")
+                            AddMsgAndPrint("\t" + originTable +  formatTabLength1 + destinationTable + formatTabLength2 + theCardinality + formatTabLength3 + relName, 0)
+
+                        # delete formatting variables
+                        del formatTab1, formatTabLength1, formatTab2, formatTabLength2, formatTab3, formatTabLength3
+                    else:
+                        AddMsgAndPrint("        <-- " + relName + ": Missing input tables (" + originTable + " or " + destinationTable + ")", 0)
+
+                    del originTable, destinationTable, originTablePath, destinationTablePath, relName, originPKey, originFKey, fwdLabel, backLabel, theCardinality
+
+                    recNum = recNum + 1
+                    arcpy.SetProgressorPosition() # Update the progressor position
 
             arcpy.ResetProgressor()  # Resets the progressor back to is initial state
             arcpy.SetProgressorLabel(" ")
 
-            del fld2, fld1, fld3, fld4, fld5, fld6, SQLtxt, inputTables, fieldsList, queryTableName, rows, row, recNum
+            #del fld2, fld1, fld3, fld4, fld5, fld6, SQLtxt, inputTables, fieldsList, queryTableName, recNum
 
             # Establish Relationship between tables and Spatial layers
             # The following lines are for formatting only
             formatTab1 = 15 - len(soilFC)
             formatTabLength1 = " " * formatTab1 + "--> "
 
-            AddMsgAndPrint("\nCreating Relationships between Featureclasses and Tables:", 1)
+            AddMsgAndPrint("\nCreating Relationships between spatial feature classes and tables:")
 
             # Relationship between MUPOLYGON --> Mapunit Table
             if not arcpy.Exists("xSpatial_MUPOLYGON_Mapunit"):
@@ -740,30 +745,30 @@ def CreateTableRelationships(tblAliases):
                 arcpy.CreateRelationshipClass_management(FGDBpath + os.sep + soilFC, FGDBpath + os.sep + "muaggatt", FGDBpath + os.sep + "xSpatial_MUPOLYGON_Muaggatt", "SIMPLE", "> Mapunit Aggregate Table", "< MUPOLYGON_Spatial", "NONE","ONE_TO_ONE", "NONE","MUKEY","mukey", "","")
             AddMsgAndPrint("\t" + soilFC + formatTabLength1 + "muaggatt" + "           --> " + "ONE_TO_ONE" + "  --> " + "xSpatial_MUPOLYGON_Muaggatt", 0)
 
-            # Relationship between SAPOLYGON --> Legend Table
+			# Relationship between SAPOLYGON --> Legend Table
             if not arcpy.Exists("xSpatial_SAPOLYGON_Legend"):
                 arcpy.CreateRelationshipClass_management(FGDBpath + os.sep + soilSaFC, FGDBpath + os.sep + "legend", FGDBpath + os.sep + "xSpatial_SAPOLYGON_Legend", "SIMPLE", "> Legend Table", "< SAPOLYGON_Spatial", "NONE","ONE_TO_ONE", "NONE","LKEY","lkey", "","")
-            AddMsgAndPrint("\t" + soilSaFC + formatTabLength1 + "legend" + "             --> " + "ONE_TO_ONE" + "  --> " + "xSpatial_SAPOLYGON_Legend", 0)
+            AddMsgAndPrint("\t" + soilSaFC + formatTabLength1 + "legend" + "            --> " + "ONE_TO_ONE" + "  --> " + "xSpatial_SAPOLYGON_Legend", 0)
 
-            # Relationship between MULINE --> Mapunit Table
+			# Relationship between MULINE --> Mapunit Table
             if not arcpy.Exists("xSpatial_MULINE_Mapunit"):
                 arcpy.CreateRelationshipClass_management(FGDBpath + os.sep + muLineFC, FGDBpath + os.sep + "mapunit", FGDBpath + os.sep + "xSpatial_MULINE_Mapunit", "SIMPLE", "> Mapunit Table", "< MULINE_Spatial", "NONE","ONE_TO_ONE", "NONE","MUKEY","mukey", "","")
-            AddMsgAndPrint("\t" + muLineFC + "         --> mapunit" + "            --> " + "ONE_TO_ONE" + "  --> " + "xSpatial_MULINE_Mapunit", 0)
+            AddMsgAndPrint("\t" + muLineFC + formatTabLength1 + "mapunit" + "            --> " + "ONE_TO_ONE" + "  --> " + "xSpatial_MULINE_Mapunit", 0)
 
-            # Relationship between MUPOINT --> Mapunit Table
+			# Relationship between MUPOINT --> Mapunit Table
             if not arcpy.Exists("xSpatial_MUPOINT_Mapunit"):
                 arcpy.CreateRelationshipClass_management(FGDBpath + os.sep + muPointFC, FGDBpath + os.sep + "mapunit", FGDBpath + os.sep + "xSpatial_MUPOINT_Mapunit", "SIMPLE", "> Mapunit Table", "< MUPOINT_Spatial", "NONE","ONE_TO_ONE", "NONE","MUKEY","mukey", "","")
-            AddMsgAndPrint("\t" + muPointFC + "        --> mapunit" + "            --> " + "ONE_TO_ONE" + "  --> " + "xSpatial_MUPOINT_Mapunit", 0)
+            AddMsgAndPrint("\t" + muPointFC + formatTabLength1 + "mapunit" + "            --> " + "ONE_TO_ONE" + "  --> " + "xSpatial_MUPOINT_Mapunit", 0)
 
-            # Relationship between FEATLINE --> Featdesc Table
+			# Relationship between FEATLINE --> Featdesc Table
             if not arcpy.Exists("xSpatial_FEATLINE_Featdesc"):
                 arcpy.CreateRelationshipClass_management(FGDBpath + os.sep + featLineFC, FGDBpath + os.sep + "featdesc", FGDBpath + os.sep + "xSpatial_FEATLINE_Featdesc", "SIMPLE", "> Featdesc Table", "< FEATLINE_Spatial", "NONE","ONE_TO_ONE", "NONE","FEATKEY","featkey", "","")
-            AddMsgAndPrint("\t" + featLineFC + "       --> featdesc" + "           --> " + "ONE_TO_ONE" + "  --> " + "xSpatial_FEATLINE_Featdesc", 0)
+            AddMsgAndPrint("\t" + featLineFC + formatTabLength1 + "featdesc" + "            --> " + "ONE_TO_ONE" + "  --> " + "xSpatial_FEATLINE_Featdesc", 0)
 
-            # Relationship between FEATPOINT --> Featdesc Table
+			# Relationship between FEATPOINT --> Featdesc Table
             if not arcpy.Exists("xSpatial_FEATPOINT_Featdesc"):
                 arcpy.CreateRelationshipClass_management(FGDBpath + os.sep + featPointFC, FGDBpath + os.sep + "featdesc", FGDBpath + os.sep + "xSpatial_FEATPOINT_Featdesc", "SIMPLE", "> Featdesc Table", "< FEATPOINT_Spatial", "NONE","ONE_TO_ONE", "NONE","FEATKEY","featkey", "","")
-            AddMsgAndPrint("\t" + featPointFC + formatTabLength1 + "featdesc" + "           --> " + "ONE_TO_ONE" + "  --> " + "xSpatial_FEATPOINT_Featdesc", 0)
+            AddMsgAndPrint("\t" + featPointFC + formatTabLength1 + "featdesc" + "            --> " + "ONE_TO_ONE" + "  --> " + "xSpatial_FEATPOINT_Featdesc", 0)
 
             del formatTab1, formatTabLength1
 
@@ -775,7 +780,7 @@ def CreateTableRelationships(tblAliases):
             return False
 
         except:
-            print_exception()
+            errorMsg()
             return False
 
     else:
@@ -830,35 +835,42 @@ def updateAliasNames(fgdbPath, GDBname):
         return False
 
     except:
-        print_exception()
+        errorMsg()
         return False
 
 ## ===============================================================================================================
 def addAttributeIndex(table,fieldList,verbose=True):
-# Attribute indexes can speed up attribute queries on feature classes and tables.
-# This function adds an attribute index(es) for the fields passed to the table that
-# is passed in. This function takes in 2 parameters:
-#   1) Table - full path to an existing table or feature class
-#   2) List of fields that exist in table
-# This function will make sure an existing index is not associated with that field.
-# Does not return anything.
+    """ Attribute indexes can speed up attribute queries on feature classes and tables.
+        This function adds an attribute index(es) for the fields passed to the table that
+        is passed in. This function takes in 2 parameters:
+           1) Table - full path to an existing table or feature class
+           2) List of fields that exist in table
+        This function will make sure an existing index is not associated with that field.
+        Does not return anything."""
 
     try:
         # Make sure table exists. - Just in case
         if not arcpy.Exists(table):
-            AddMsgAndPrint("Attribute index cannot be created for: " + os.path.basename(table) + " TABLE DOES NOT EXIST",2)
+            AddMsgAndPrint("\nAttribute index cannot be created for: " + os.path.basename(table) + " TABLE DOES NOT EXIST",2)
             return False
 
         else:
-            if verbose: AddMsgAndPrint("Adding Indexes to Table: " + os.path.basename(table))
+            if verbose:
+                AddMsgAndPrint("\n\tAdding Attribute Indexes to Table: " + os.path.basename(table))
+                numOfFields = len(fieldList)
+                arcpy.SetProgressor("step", "Adding Attribute Indexes to Table: " + os.path.basename(table), 0, numOfFields, 1)
 
         # iterate through every field
         for fieldToIndex in fieldList:
 
+            if verbose:
+                arcpy.SetProgressorLabel("Adding Attribute Indexes to Table: " + os.path.basename(table) + " - Field: " + fieldToIndex)
+
             # Make sure field exists in table - Just in case
             if not len(arcpy.ListFields(table,"*" + fieldToIndex))>0:
                 if verbose:
-                    AddMsgAndPrint("\tAttribute index cannot be created for: " + fieldToIndex + ". FIELD DOES NOT EXIST",2)
+                    AddMsgAndPrint("\t\tAttribute index cannot be created for: " + fieldToIndex + ". FIELD DOES NOT EXIST",2)
+                    arcpy.SetProgressorPosition()
                     continue
 
             # list of indexes (attribute and spatial) within the table that are
@@ -870,7 +882,7 @@ def addAttributeIndex(table,fieldList,verbose=True):
 
             # check existing indexes to see if fieldToIndex is already associated
             # with an index
-            if existingIndexes > 0:
+            if len(existingIndexes) > 0:
 
                 # iterate through the existing indexes looking for a field match
                 for index in existingIndexes:
@@ -884,7 +896,8 @@ def addAttributeIndex(table,fieldList,verbose=True):
                         # Field is already part of an existing index - Notify User
                         if fld.name == fieldToIndex:
                             if verbose:
-                                AddMsgAndPrint("\tAttribute Index for " + fieldToIndex + " field already exists",1)
+                                AddMsgAndPrint("\t\tAttribute Index for " + fieldToIndex + " field already exists",1)
+                                arcpy.SetProgressorPosition()
                                 bFieldIndexExists = True
 
                     # Field is already part of an existing index - Proceed to next field
@@ -899,12 +912,12 @@ def addAttributeIndex(table,fieldList,verbose=True):
                 arcpy.AddIndex_management(table,fieldToIndex,newIndex,"#","ASCENDING")
 
                 if verbose:
-                    AddMsgAndPrint("\tSuccessfully added attribute index for " + fieldToIndex)
+                    AddMsgAndPrint("\t\tSuccessfully added attribute index for " + fieldToIndex)
+                    arcpy.SetProgressorPosition()
 
     except:
-        print_exception()
+        errorMsg()
         return False
-
 
 ## ====================================== Main Body ===========================================================
 # Import modules
@@ -912,6 +925,9 @@ import arcpy, sys, string, os, time, datetime, re, csv, traceback, shutil
 from arcpy import env
 
 if __name__ == '__main__':
+
+    arcpy.env.parallelProcessingFactor = "100%"
+    arcpy.env.overwriteOutput = True
 
     # ---------------------------------------------------------------------------------------Input Arguments
     # Parameter # 1: (Required) Name of new file geodatabase to create
@@ -1235,13 +1251,15 @@ if __name__ == '__main__':
         arcpy.SetProgressorPosition()
 
         # Strictly Formatting
-        AddMsgAndPrint("\n******************************************************************************************************************",1)
+        AddMsgAndPrint("\n******************************************************************************************************************")
 
         # ----------------------------------------------------------------------------------------------------------------------------- Begin the Import Tabular Process
         # Import tabular data if option was selected
         if b_importTabularData:
 
             i = 0
+            total = splitThousands(len(soilShpList))
+
             for survey in soilShpList:
 
                 tabularFolder = os.path.join(os.path.dirname(os.path.dirname(survey)),"tabular")
@@ -1253,8 +1271,8 @@ if __name__ == '__main__':
 
                     # Formatting purposes
                     if i == 0:
-                        AddMsgAndPrint("Processing: " + SSA,1)
-                    else: AddMsgAndPrint("\nProcessing: " + SSA,1)
+                        AddMsgAndPrint("Processing: " + SSA)
+                    else: AddMsgAndPrint("\nProcessing: " + SSA)
 
                     # Make a temp copy of the special feature description in the spatial folder and put it in the
                     # tabular folder so that it can be imported.  It will be named "featdesc"
@@ -1275,7 +1293,7 @@ if __name__ == '__main__':
                     importFailed = 0
 
                     # Import the text files into the FGDB tables
-                    if not importTabularData(tabularFolder,tblAliases):
+                    if not importTabularData(tabularFolder,tblAliases,i):
                         importFailed += 1
 
                     # remove the featdesc file from the tabular folder regardless of import success or not
@@ -1296,7 +1314,7 @@ if __name__ == '__main__':
             del i
 
             # establish relationships if mapunit Table is not empty
-            if arcpy.GetCount_management(FGDBpath + os.sep + "mapunit").getOutput(0) > 0:
+            if int(arcpy.GetCount_management(FGDBpath + os.sep + "mapunit").getOutput(0)) > 0:
 
                 # Establish relationships as long as all of the surveys did not fail to import
                 if not importFailed == len(soilShpDict):
@@ -1348,23 +1366,18 @@ if __name__ == '__main__':
         if not addAttributeIndex(os.path.join(FGDBpath,"muaggatt"),["musym","muname","mustatus","flodfreqdcd","drclassdcd","hydgrpdcd","hydclprs"],False):pass
 
         # ------------------------------------------------------------------------------ Summarize output dataset
-        AddMsgAndPrint("\n-------------------------------------------------------------------------------------------------------",1)
-        AddMsgAndPrint("Total # of SSURGO Datasets Appended: " + str(splitThousands(len(soilShpList))),1)
-        AddMsgAndPrint("\tTotal # of Mapunit Polygons: " + str(splitThousands(arcpy.GetCount_management(FGDBpath + os.sep + soilFC).getOutput(0))),1)
-        AddMsgAndPrint("\tTotal # of Mapunit Lines: " + str(splitThousands(arcpy.GetCount_management(FGDBpath + os.sep + muLineFC).getOutput(0))),1)
-        AddMsgAndPrint("\tTotal # of Mapunit Points: " + str(splitThousands(arcpy.GetCount_management(FGDBpath + os.sep + muPointFC).getOutput(0))),1)
-        AddMsgAndPrint("\tTotal # of Special Feature Points: " + str(splitThousands(arcpy.GetCount_management(FGDBpath + os.sep + featPointFC).getOutput(0))),1)
-        AddMsgAndPrint("\tTotal # of Special Feature Lines: " + str(splitThousands(arcpy.GetCount_management(FGDBpath + os.sep + featLineFC).getOutput(0))),1)
-
-        arcpy.RefreshCatalog(outputFolder)
+        AddMsgAndPrint("\n-------------------------------------------------------------------------------------------------------")
+        AddMsgAndPrint("Total # of SSURGO Datasets Appended: " + str(splitThousands(len(soilShpList))))
+        AddMsgAndPrint("\tTotal # of Mapunit Polygons: " + str(splitThousands(arcpy.GetCount_management(FGDBpath + os.sep + soilFC).getOutput(0))))
+        AddMsgAndPrint("\tTotal # of Mapunit Lines: " + str(splitThousands(arcpy.GetCount_management(FGDBpath + os.sep + muLineFC).getOutput(0))))
+        AddMsgAndPrint("\tTotal # of Mapunit Points: " + str(splitThousands(arcpy.GetCount_management(FGDBpath + os.sep + muPointFC).getOutput(0))))
+        AddMsgAndPrint("\tTotal # of Special Feature Points: " + str(splitThousands(arcpy.GetCount_management(FGDBpath + os.sep + featPointFC).getOutput(0))))
+        AddMsgAndPrint("\tTotal # of Special Feature Lines: " + str(splitThousands(arcpy.GetCount_management(FGDBpath + os.sep + featLineFC).getOutput(0))))
 
         from datetime import datetime
         endTime = datetime.now()
-        AddMsgAndPrint("\nTotal Time: " + str(endTime - startTime),0)
+        AddMsgAndPrint("\nTotal Time: " + str(endTime - startTime))
 
     # This is where the fun ends!
-    except arcpy.ExecuteError:
-        AddMsgAndPrint(arcpy.GetMessages(2),2)
-
     except:
-        print_exception()
+        errorMsg()

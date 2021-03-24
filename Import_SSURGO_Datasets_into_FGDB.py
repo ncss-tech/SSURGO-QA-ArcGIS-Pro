@@ -1072,7 +1072,7 @@ if __name__ == '__main__':
             #env.geographicTransformations = "WGS_1984_(ITRF00)_To_NAD_1983"  # WKID 108190
         else:
             AddMsgAndPrint("\nCannot handle user Datum: " + str(userDatum) + " Exiting",2)
-            sys.exit()
+            exit()
 
         """ ----------------------------------------------------------------------------------------------------------------------------- Setup the Merging Process"""
 
