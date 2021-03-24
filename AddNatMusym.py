@@ -31,6 +31,26 @@
 #
 # The tool will handle Shapefiles and Geodatabase feature classes.
 
+# ==========================================================================================
+# Updated  3/23/2021 - Adolfo Diaz
+#
+# - Updated and Tested for ArcGIS Pro 2.5.2 and python 3.6
+# - All describe functions use the arcpy.da.Describe functionality.
+# - All intermediate datasets are written to "in_memory" instead of written to a FGDB and
+#   and later deleted.  This avoids having to check and delete intermediate data during every
+#   execution.
+# - All cursors were updated to arcpy.da
+# - Added code to remove layers from an .aprx rather than simply deleting them
+# - Updated AddMsgAndPrint to remove ArcGIS 10 boolean and gp function
+# - Updated errorMsg() Traceback functions slightly changed for Python 3.6.
+# - Added parallel processing factor environment
+# - swithced from sys.exit() to exit()
+# - All gp functions were translated to arcpy
+# - Every function including main is in a try/except clause
+# - Main code is wrapped in if __name__ == '__main__': even though script will never be
+#   used as independent library.
+# - Normal messages are no longer Warnings unnecessarily.
+
 ## ===================================================================================
 def AddMsgAndPrint(msg, severity=0):
     """prints messages to screen if the script is executed as
@@ -39,7 +59,7 @@ def AddMsgAndPrint(msg, severity=0):
 
     #Split the message on \n first, so that if it's multiple lines, a GPMessage will be added for each line
     try:
-        print msg
+        print(msg)
 
         #for string in msg.split('\n'):
             #Add a geoprocessing message (in case this is run as a tool)
@@ -57,15 +77,19 @@ def AddMsgAndPrint(msg, severity=0):
 
 ## ================================================================================================================
 def errorMsg():
-    """ Uses the traceback module to print the last known error message"""
-
     try:
+
         exc_type, exc_value, exc_traceback = sys.exc_info()
         theMsg = "\t" + traceback.format_exception(exc_type, exc_value, exc_traceback)[1] + "\n\t" + traceback.format_exception(exc_type, exc_value, exc_traceback)[-1]
-        AddMsgAndPrint(theMsg,2)
+
+        if theMsg.find("exit") > -1:
+            AddMsgAndPrint("\n\n")
+            pass
+        else:
+            AddMsgAndPrint(theMsg,2)
 
     except:
-        AddMsgAndPrint("Unhandled error in errorMsg method", 2)
+        AddMsgAndPrint("Unhandled error in unHandledException method", 2)
         pass
 
 ## ================================================================================================================
@@ -124,13 +148,18 @@ def GetUniqueValues(theInput,theField):
         This list will ultimately be passed over to an SDA query."""
 
     try:
-        featureCount = int(arcpy.GetCount_management(theInput).getOutput(0))
+        if not bRaster:
+            featureCount = int(arcpy.GetCount_management(theInput).getOutput(0))
+        else:
+            featureCount = len([row[0] for row in arcpy.da.SearchCursor(theInput,theField)])
 
         # Inform the user of how the values are being compiled
         if bFGDBsapolygon:
             AddMsgAndPrint("\nCompiling a list of unique " + theField + " values from " + splitThousands(featureCount) + " polygons using SAPOLYGON feature class")
         elif bFGDBmapunit:
             AddMsgAndPrint("\nCompiling a list of unique " + theField + " values from " + splitThousands(featureCount) + " polygons using mapunit table")
+        elif bRaster:
+            AddMsgAndPrint("\nCompiling a list of unique " + theField + " values")
         else:
             AddMsgAndPrint("\nCompiling a list of unique " + theField + " values from " + splitThousands(featureCount) + " records")
 
@@ -153,6 +182,7 @@ def GetUniqueValues(theInput,theField):
                         valueList.append(rec[0])
 
                     arcpy.SetProgressorPosition()
+            del cur
             arcpy.ResetProgressor()
 
             AddMsgAndPrint("\tThere are " + splitThousands(len(valueList)) + " unique " + theField + " values")
@@ -247,7 +277,7 @@ def getNATMUSYM(listsOfValues, featureLayer):
         natmusymDict = dict()
 
         # SDMaccess URL
-        URL = "https://sdmdataaccess.nrcs.usda.gov/Tabular/SDMTabularService/post.rest"
+        url = r'https://SDMDataAccess.sc.egov.usda.gov/Tabular/post.rest'
 
         """ ---------------------------------------- Iterate through lists of unique values to submit requests for natsym ------------------------------"""
         # Iterate through each list that has been parsed for no more than 1000 mukeys
@@ -276,31 +306,32 @@ def getNATMUSYM(listsOfValues, featureLayer):
             # Create request using JSON, return data as JSON
             dRequest = dict()
             dRequest["format"] = "JSON"
-            ##dRequest["FORMAT"] = "JSON+COLUMNNAME+METADATA"
             dRequest["query"] = sQuery
+            ##dRequest["FORMAT"] = "JSON+COLUMNNAME+METADATA"
             jData = json.dumps(dRequest)
 
             # Send request to SDA Tabular service using urllib2 library
-            req = urllib2.Request(URL, jData)
+            # ArcPro Request
+            jData = jData.encode('ascii')
 
             """ --------------------------------------  Try connecting to SDaccess to read JSON response - You get 3 Attempts ------------------------"""
             # ---------------------------- First Attempt
             try:
-                resp = urllib2.urlopen(req)
+                response = urllib.request.urlopen(url,jData)
             except:
 
                 # ---------------------------- Second Attempt
                 try:
                     AddMsgAndPrint("\t2nd attempt at requesting data")
-                    resp = urllib2.urlopen(req)
+                    response = urllib.request.urlopen(url,jData)
                 except:
 
                     # ---------------------------- Last Attempt
                     try:
                         AddMsgAndPrint("\t3rd attempt at requesting data")
-                        resp = urllib2.urlopen(req)
+                        response = urllib.request.urlopen(url,jData)
 
-                    except URLError, e:
+                    except URLError as e:
                         AddMsgAndPrint("\n\n" + sQuery,2)
                         if hasattr(e, 'reason'):
                             AddMsgAndPrint("\n\t" + URL,2)
@@ -312,22 +343,17 @@ def getNATMUSYM(listsOfValues, featureLayer):
 
                         return False
 
-                    except socket.timeout, e:
+                    except socket.timeout as e:
                         AddMsgAndPrint("\n\t" + URL,2)
                         AddMsgAndPrint("\tServer Timeout Error", 2)
                         return False
 
-                    except socket.error, e:
+                    except socket.error as e:
                         AddMsgAndPrint("\n\t" + URL)
                         AddMsgAndPrint("\tNASIS Reports Website connection failure", 2)
                         return False
 
-                    except httplib.BadStatusLine:
-                        AddMsgAndPrint("\n\t" + URL)
-                        AddMsgAndPrint("\tNASIS Reports Website connection failure", 2)
-                        return False
-
-            jsonString = resp.read()
+            jsonString = response.read()
             data = json.loads(jsonString)
 
             """ Sample Output:
@@ -347,7 +373,6 @@ def getNATMUSYM(listsOfValues, featureLayer):
             for pair in data["Table"]:
                 natmusymDict[pair[0]] = (pair[1],pair[2])
 
-            del jData,req,resp,jsonString,data
             arcpy.SetProgressorPosition()
 
         arcpy.ResetProgressor()
@@ -356,11 +381,16 @@ def getNATMUSYM(listsOfValues, featureLayer):
         arcpy.SetProgressorLabel("Adding NATSYM and MUNAME fields if they don't exist")
         if not "muname" in [f.name.lower() for f in arcpy.ListFields(featureLayer)]:
             arcpy.AddField_management(featureLayer,'MUNAME','TEXT','#','#',175,'Mapunit Name')
+            AddMsgAndPrint("Successfully Added Map Unit Name Field")
 
         if not "natmusym" in [f.name.lower() for f in arcpy.ListFields(featureLayer)]:
             arcpy.AddField_management(featureLayer,'NATMUSYM','TEXT','#','#',23,'National MU Symbol')
+            AddMsgAndPrint("Successfully Added National MUSYM Field")
 
-        mukeyField = FindField(featureLayer,"MUKEY")
+        if bRaster:
+            mukeyField = sourceField
+        else:
+            mukeyField = FindField(featureLayer,"MUKEY")
 
         """ -----------------------------------------  Add MUKEY Attribute Index to the Feature Layer if not present -----------------------------------------"""
 ##        # Get list of indexes for the feature Layer
@@ -391,11 +421,12 @@ def getNATMUSYM(listsOfValues, featureLayer):
 
             for row in cursor:
 
-                uNatmusym = natmusymDict.get(row[0])[0]
-                uMuName = natmusymDict.get(row[0])[1]
-                arcpy.SetProgressorLabel("Importing Values: " + row[0] + " : " + uNatmusym + "--" + uMuName)
-
                 try:
+                    mukey = str(row[0])
+                    uNatmusym = natmusymDict[mukey][0]
+                    uMuName = natmusymDict[mukey][1]
+                    arcpy.SetProgressorLabel("Importing Values: " + mukey + " : " + uNatmusym + "--" + uMuName)
+
                     row[1] = uNatmusym
                     row[2] = uMuName
                     cursor.updateRow(row)
@@ -404,7 +435,7 @@ def getNATMUSYM(listsOfValues, featureLayer):
                     arcpy.SetProgressorPosition()
 
                 except:
-                    AddMsgAndPrint("\tInvalid MUKEY: " + row[0],2)
+                    AddMsgAndPrint("\tInvalid MUKEY: " + mukey,2)
                     continue
 
         arcpy.ResetProgressor()
@@ -416,10 +447,6 @@ def getNATMUSYM(listsOfValues, featureLayer):
 
         return True
 
-    except urllib2.HTTPError:
-        errorMsg()
-        return False
-
     except:
         errorMsg()
         return False
@@ -427,40 +454,62 @@ def getNATMUSYM(listsOfValues, featureLayer):
 ## ===================================================================================
 ## ====================================== Main Body ==================================
 # Import modules
-import sys, string, os, locale, arcpy, traceback, urllib2, httplib, json, re, socket
-from urllib2 import urlopen, URLError, HTTPError
+import sys, string, os, locale, arcpy, traceback, json, re, socket, urllib
+from urllib.request import Request, urlopen, URLError, HTTPError
 from arcpy import env
 
 if __name__ == '__main__':
 
     try:
-        inputFeature = arcpy.GetParameterAsText(0)
+        arcpy.env.parallelProcessingFactor = "75%"
+        arcpy.env.overwriteOutput = True
 
-        bFGDBmapunit = False
-        bFGDBsapolygon = False
-        bAreaSym = False
+        inputFeature = arcpy.GetParameterAsText(0)
+        #inputFeature = r'E:\SSURGO_QA_ArcPro_Migration\scratch.gdb\SSURGO_Mapunits'
+
+        bFGDBsapolygon = False  # SAPOLYGON will be used to summarize by Areasymbol
+        bAreaSym = False        # Areasymbol field is the source field
+        bFGDBmapunit = False    # Mapunit table will be used to summarize by MUKEY (1 request)
+        bRaster = False         # input is a raster
         source = inputFeature
 
-        """ ------------------------------------------- MUKEY field must be present ----------------------------------------------"""
-        if not FindField(inputFeature,"MUKEY"):
-            AddMsgAndPrint("\n\"MUKEY\" field is missing from input feature!  EXITING!",2)
-            exit()
-
         """ -------------------------------- Describe Data to determine the source field of the unique values ---------------------"""
-        theDesc = arcpy.Describe(inputFeature)
-        theDataType = theDesc.dataType
-        theName = theDesc.name
-        theElementType = theDesc.dataElementType
+        theDesc = arcpy.da.Describe(inputFeature)
+        theDataType = theDesc['dataType']
+        theName = theDesc['name']
+        theElementType = theDesc['dataElementType']
 
         """ -------------------------------------------- Input feature is a Shapefile or Raster """
         if theElementType.lower() in ('deshapefile','derasterdataset'):
 
-            if FindField(inputFeature,"AREASYMBOL"):
+            # Make sure raster input has an attribute table
+            if theElementType == 'DERasterDataset':
+                bRaster = True
+                if not arcpy.Raster(inputFeature).hasRAT:
+                    AddMsgAndPrint("Building Raster Attribute Table to inventory fields")
+
+                    try:
+                        arcpy.BuildRasterAttributeTable_management(inputFeature,"Overwrite")
+                    except:
+                        AddMsgAndPrint("Failed to Build an Attribute table, Exiting!",2)
+                        exit()
+
+            if FindField(inputFeature,"MUKEY"):
+                sourceField = "MUKEY"
+
+            elif FindField(inputFeature,"AREASYMBOL"):
                 sourceField = "AREASYMBOL"
                 bAreaSym = True
 
-            elif FindField(inputFeature,"MUKEY"):
-                sourceField = "MUKEY"
+            elif theElementType == 'DERasterDataset':
+                rasterFlds = [f.name for f in arcpy.ListFields(inputFeature)]
+                if 'Value' in rasterFlds:
+                    sourceField = 'Value'
+                    AddMsgAndPrint("Attempting to use Raster 'Value' field as MUKEY field",1)
+                else:
+                    AddMsgAndPrint("\t\"AREASYMBOL\" and \"MUKEY\" fields are missing from " + theName  + " layer -- Need one or the other to continue.  EXITING!",2)
+                    exit()
+
             else:
                 AddMsgAndPrint("\t\"AREASYMBOL\" and \"MUKEY\" fields are missing from " + theName  + " layer -- Need one or the other to continue.  EXITING!",2)
                 exit()
@@ -468,11 +517,18 @@ if __name__ == '__main__':
             """ ------------------------------------- Input feature is a feature class"""
         elif theElementType.lower().find('featureclass') > -1:
 
-            theFCpath = theDesc.catalogPath
+            theFCpath = theDesc['catalogPath']
             theFGDBpath = theFCpath[:theFCpath.find(".gdb")+4]
             arcpy.env.workspace = theFGDBpath
 
+            mukeyField = FindField(theFCpath,"MUKEY")
+
+            if not mukeyField:
+                AddMsgAndPrint("\t\"MUKEY\" field is missing from feature class! - EXITING!",2)
+                exit()
+
             # -------------------------------------- Use AREASYMBOL if available
+            # RTSD Feature class with SAPOLYGON layer
             # summarize areasymbols from SAPOLYGON layer first.
             # This is the fastest method since it is the records
             if arcpy.ListFeatureClasses("SAPOLYGON", "Polygon"):
@@ -481,6 +537,7 @@ if __name__ == '__main__':
                 sourceField = "AREASYMBOL"
                 bAreaSym = True
 
+            # Regular Feature Class - NO SAPOLYGON layer
             # summarize AREASYMBOL from input feature class.
             # this method is the same as summarizing by MUKEY
             # but still preferred over MUKEY b/c of fewer
@@ -512,7 +569,7 @@ if __name__ == '__main__':
             AddMsgAndPrint("\nInvalid data type: " + theDataType.lower(),2)
             exit()
 
-    	""" -------------------------------  Get list of unique values from the specified source field  ---------------------------------"""
+        """ -------------------------------  Get list of unique values from the specified source field  ---------------------------------"""
         uniqueValueList = GetUniqueValues(source,sourceField)
 
         """ --------------------------------- Populate input Feature with NATMUSYM and MUNAME values-------------------------------------"""

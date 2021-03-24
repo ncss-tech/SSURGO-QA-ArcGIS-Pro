@@ -174,7 +174,7 @@ def AddMsgAndPrint(msg, severity=0):
     #
     # Split the message on \n first, so that if it's multiple lines, a GPMessage will be added for each line
 
-    #print msg
+    #print(msg)
 
     try:
 

@@ -206,7 +206,7 @@ def GetPublicationDate(areaSym):
     #
     # Test version of SDA: http://sdmdataaccessha.dev.sc.egov.usda.gov/
     #
-    import time, datetime, httplib
+    import time, datetime
     import xml.etree.cElementTree as ET
 
     try:
