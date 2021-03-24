@@ -13,6 +13,28 @@
 # ArcGIS 10.1 compatible
 #
 
+# ==========================================================================================
+# Updated  3/24/2021 - Adolfo Diaz
+#
+# - Updated and Tested for ArcGIS Pro 2.5.2 and python 3.6
+# - All describe functions use the arcpy.da.Describe functionality.
+# - All intermediate datasets are written to "in_memory" instead of written to a FGDB and
+#   and later deleted.  This avoids having to check and delete intermediate data during every
+#   execution.
+# - All cursors were updated to arcpy.da
+# - Added code to remove layers from an .aprx rather than simply deleting them
+# - Updated AddMsgAndPrint to remove ArcGIS 10 boolean and gp function
+# - Updated errorMsg() Traceback functions slightly changed for Python 3.6.
+# - Added parallel processing factor environment
+# - swithced from sys.exit() to exit()
+# - All gp functions were translated to arcpy
+# - Every function including main is in a try/except clause
+# - Main code is wrapped in if __name__ == '__main__': even though script will never be
+#   used as independent library.
+# - Normal messages are no longer Warnings unnecessarily.
+#
+# Beginning of Functions
+
 # ============================================================================================================
 def AddMsgAndPrint(msg, severity=0):
     # prints message to screen if run as a python script
@@ -338,6 +360,7 @@ if __name__ == '__main__':
             selSoilsFL = "Selected Soils (by " +fldName + ")"
 
             # Build selection query string from AREASYMBOL list (ssaList)
+            # (AREASYMBOL = 'MT051' OR AREASYMBOL = 'MT615')
             try:
                 i = 0
                 sQuery = ""
