@@ -40,6 +40,11 @@
 #   used as independent library.
 # - Normal messages are no longer Warnings unnecessarily.
 
+# ==========================================================================================
+# Updated  7/29/2020 - Adolfo Diaz
+#
+# - Encountered a bug when adding .lyrx file to arcgis pro.  A variable was incorrectly defined.
+# - Added additional checks to make sure layer was added to correct ArcGIS Pro Map instead of the first one.
 
 # ==============================================================================================================================
 def AddMsgAndPrint(msg, severity=0):
@@ -202,7 +207,7 @@ def MakeOutLayer(inLayer, sr, inField1, inField2, fldLength):
         return "",""
 
 # ==============================================================================================================================
-def AddLayerToArcGISPro(inLayer,symbologyLyr,newLyrName=False):
+def AddLayerToArcGISPro(lyrToSym,symbologyLyr,newLyrName=False):
     # Description
     # This function will symbolize a layer using an existing symbology file
     # and add the symbolized layer to the first map in the current ArcGIS Pro Session
@@ -229,28 +234,37 @@ def AddLayerToArcGISPro(inLayer,symbologyLyr,newLyrName=False):
     # - Determine which map to insert layer into if ArcGIS Pro Session has multiple maps.
 
     try:
-        desc = arcpy.da.Describe(inLayer)
+        desc = arcpy.da.Describe(lyrToSym)
         inLayerPath = desc['catalogPath']
         inLayerName = desc['name']
 
         aprx = arcpy.mp.ArcGISProject("CURRENT")
-        aprxMap = aprx.listMaps('*')[0]
+        aprxMap = aprx.listMaps('*')
+        currentMap = ""
+
+        inputName = arcpy.da.Describe(inLayer)['baseName']
+
+        if len(aprxMap) > 1:
+            for map in aprxMap:
+                for layer in map.listLayers():
+                    if inputName == layer.name:
+                        currentMap = map
+                        break
+        else:
+            currentMap = aprx.listMaps('*')[0]
 
         # .lyr or .lyrx exists
         if arcpy.Exists(symbologyLyr):
-
-            # Create an .lyrx file from .lyr
-            if lyrxPath.endswith('.lyr'):
-                lyrxObject = arcpy.mp.LayerFile(symbologyLyr).listLayers()[0]     # create a layer object from .lyr
-                newLyrxFile = symbologyLyr + "x"                                  # Path to new lyrx file
-                lyrxObject.saveACopy(newLyrxFile)                                 # Create new lyrx file
-                lyrxObject = arcpy.mp.LayerFile(newLyrxFile).listLayers()[0]      # create a layer object from .lyrx
-
-            # .lyrx file exists
-            else:
-                lyrxObject = arcpy.mp.LayerFile(symbologyLyr).listLayers()[0]  # create a layer object from .lyrx
-
-
+##            # Create an .lyrx file from .lyr
+##            if lyrxPath.endswith('.lyr'):
+##                lyrxObject = arcpy.mp.LayerFile(symbologyLyr).listLayers()[0]     # create a layer object from .lyr
+##                newLyrxFile = symbologyLyr + "x"                                  # Path to new lyrx file
+##                lyrxObject.saveACopy(newLyrxFile)                                 # Create new lyrx file
+##                lyrxObject = arcpy.mp.LayerFile(newLyrxFile).listLayers()[0]      # create a layer object from .lyrx
+##
+##            # .lyrx file exists
+##            else:
+            lyrxObject = arcpy.mp.LayerFile(symbologyLyr).listLayers()[0]  # create a layer object from .lyrx
 
             # Connection Property Dictionary
             # {'dataset': 'SSURGO_WCT',
@@ -264,19 +278,19 @@ def AddLayerToArcGISPro(inLayer,symbologyLyr,newLyrName=False):
             lyrxObject.updateConnectionProperties(lyrxObject.connectionProperties,lyrxConnectProperties)
 
             # Add layer to active map
-            aprxMap.addLayer(lyrxObject,"TOP")
+            currentMap.addLayer(lyrxObject,"TOP")
 
             # Rename newly added layer to user
             if newLyrName:
 
                 # Grab the top layer and rename it
-                recentlyAddedLyr = aprxMap.listLayers()[0]
+                recentlyAddedLyr = currentMap.listLayers()[0]
                 recentlyAddedLyr.name = newLyrName
 
         # Symbology layer does NOT exist.  Add layer to ArcGIS Pro Session with no symbology
         else:
-            lyr = aprxMap.addDataFromPath(inLayerPath)
-            AddMsgAndPrint("Added " + inLayerName + " to ArcGIS Pro but could not symbolize it",1)
+            lyr = currentMap.addDataFromPath(inLayerPath)
+            AddMsgAndPrint("Added " + lyrToSym + " to ArcGIS Pro but could not symbolize it",1)
             AddMsgAndPrint("bc " + lyrxPath + " does not exist",1)
 
     except:
@@ -295,12 +309,6 @@ if __name__ == '__main__':
         inLayer = arcpy.GetParameterAsText(0)  # single polygon featurelayer as input parameter
         inField1 = arcpy.GetParameterAsText(1) # attribute column used in selection
         inField2 = arcpy.GetParameterAsText(2) # secondary attribute column (usually AREASYMBOL)
-
-##        lyrFile = r'E:\python_scripts\GitHub\SSURGO-QA_ArcPro\GreenDot.lyr'
-##        cp = r'E:\Temp\WI025\spatial\QA_Common_Points_MUSYM_AREASYMBOL.shp'
-##
-##        AddLayerToArcGISPro(cp,lyrFile,"Just a Test")
-##        exit()
 
         arcpy.env.parallelProcessingFactor = "75%"
         arcpy.env.overwriteOutput = True

@@ -51,6 +51,11 @@ def AddMsgAndPrint(msg, severity=0):
     #
     #Split the message on \n first, so that if it's multiple lines, a GPMessage will be added for each line
     try:
+        f = open(textFilePath,'a+')
+        f.write(msg + "\n")
+        f.close
+
+        del f
 
         print(msg)
         #for string in msg.split('\n'):
