@@ -125,7 +125,6 @@
 #       to remove continue statements from within if statements.  So many versions were created in an effort to
 #       troubleshoot this problem that I decided to print the version of the script in the log file.
 #
-#  Last updated 10/24/2017
 
 # ==========================================================================================
 # Updated  3/18/2021 - Adolfo Diaz
