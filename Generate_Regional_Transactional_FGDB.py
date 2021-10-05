@@ -31,6 +31,10 @@
 #   used as independent library.
 # - Normal messages are no longer Warnings unnecessarily.
 
+# ==========================================================================================
+# Updated  10/5/2021 - Adolfo Diaz
+# Updated XML workspaces to reflect new coordinate systems.
+
 ## ================================================================================================================
 def errorMsg():
     try:
@@ -244,7 +248,7 @@ def createFGDB(regionChoice,outputFolder):
         else:
             FY = "FY" + str(datetime.now().strftime("%y"))
 
-        # Alaska = Alaska Albers Equal Area Conic (NAD_1983_Alaska_Albers) wkid: 3338
+        # Alaska =  NAD83 / Alaska Albers (EPSG 3338)
         if regionChoice == "Region 1 - AK":
             xmlFile = os.path.dirname(sys.argv[0]) + os.sep + "RTSD_XMLWorkspace_Alaska.xml"
             newName = "RTSD_Region_1_Alaska_" + FY
@@ -264,12 +268,12 @@ def createFGDB(regionChoice,outputFolder):
             xmlFile = os.path.dirname(sys.argv[0]) + os.sep + "RTSD_XMLWorkspace_PacBasin.xml"
             newName ="RTSD_Region_2_PacBasin_" + FY
 
-        # Puerto Rico US Virgin Islands - USA Contiguous Albers Equal Area Conic USGS version NAD83
+        # Puerto Rico US Virgin Islands - NAD83 / Puerto Rico & Virgin Is. EPSG 32161
         elif regionChoice == "Region 3 - PRUSVI":
-            xmlFile = os.path.dirname(sys.argv[0]) + os.sep + "RTSD_XMLWorkspace_CONUS.xml"
+            xmlFile = os.path.dirname(sys.argv[0]) + os.sep + "RTSD_XMLWorkspace_PRUSVI.xml"
             newName ="RTSD_Region_3_PRUSVI_" + FY
 
-        # CONUS - USA Contiguous Albers Equal Area Conic USGS version NAD83
+        # CONUS - NAD83 / CONUS Albers (EPSG 5070)
         else:
             xmlFile = os.path.dirname(sys.argv[0]) + os.sep + "RTSD_XMLWorkspace_CONUS.xml"
 
