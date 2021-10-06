@@ -1501,7 +1501,7 @@ if __name__ == '__main__':
             del i
 
             # establish relationships if mapunit Table is not empty
-            if arcpy.GetCount_management(FGDBpath + os.sep + "mapunit").getOutput(0) > 0:
+            if int(arcpy.GetCount_management(FGDBpath + os.sep + "mapunit").getOutput(0)) > 0:
 
                 # establish Relationships
                 if not CreateTableRelationships(tblAliases):
