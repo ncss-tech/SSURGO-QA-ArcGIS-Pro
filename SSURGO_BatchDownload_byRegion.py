@@ -113,6 +113,7 @@ def getRegionalAreaSymbolList(ssaTable, masterTable, userRegionChoice):
 # [u'WI001, u'WI003']
 
     try:
+        # List of areasymbols that will be downloaded.  Includes buffer
         areaSymbolList = []
 
         where_clause = "\"Region_Download\" = '" + userRegionChoice + "'"
@@ -285,7 +286,7 @@ def GetDownload(areasym, surveyDate):
         zipName1 = "wss_SSA_" + areaSym + "_soildb_US_2003_[" + surveyDate + "].zip"  # wss_SSA_WI025_soildb_US_2003_[2012-06-26].zip
         zipName2 = "wss_SSA_" + areaSym + "_soildb_" + areaSym[0:2] + "_2003_[" + surveyDate + "].zip"  # wss_SSA_WI025_soildb_WI_2003_[2012-06-26].zip
 
-        zipURL1 = baseURL + zipName1  # https://websoilsurvey.sc.egov.usda.gov/DSD/Download/Cache/SSA/wss_SSA_WI025_soildb_US_2003_[2012-06-26].zip
+        zipURL1 = baseURL + zipName1  # https://websoilsurvey.sc.egov.usda.gov/DSD/Download/Cache/SSA/wss_SSA_WI025_soildb_WI_2003_[2021-09-07].zip
         zipURL2 = baseURL + zipName2  # https://websoilsurvey.sc.egov.usda.gov/DSD/Download/Cache/SSA/wss_SSA_WI025_soildb_WI_2003_[2012-06-26].zip
 
         AddMsgAndPrint("\tGetting zipfile from Web Soil Survey...", 0)
@@ -299,6 +300,12 @@ def GetDownload(areasym, surveyDate):
                 # create a response object for the requested URL to download a specific SSURGO dataset.
                 try:
                     # try downloading zip file with US 2003 Template DB first
+
+##                    r = requests.get(zipURL1)
+##                    z = zipfile.ZipFile(io.BytesIO(r.content))
+##                    zipContents = z.namelist()
+##                    z.extractall(path=outputFolder,members=zipContents)
+
                     request = urlopen(zipURL1)
                     zipName = zipName1
 
@@ -354,6 +361,7 @@ def GetDownload(areasym, surveyDate):
 # Import system modules
 import arcpy, sys, os, locale, string, traceback, shutil, zipfile, glob, socket, json, urllib
 from urllib.request import Request, urlopen, URLError, HTTPError
+import requests, zipfile
 #from urllib2 import urlopen, URLError, HTTPError
 from arcpy import env
 from time import sleep
@@ -501,17 +509,17 @@ if __name__ == '__main__':
                             env.workspace = spatialFolder
                             shpList = arcpy.ListFeatureClasses("soilmu_a*", "Polygon")
 
-                            try:
-                                if len(shpList) == 1:
-                                    muShp = shpList[0]
-                                    AddMsgAndPrint("\t\tImporting metadata for " + muShp)
-                                    metaData = os.path.join(newFolder, "soil_metadata_" + areaSym.lower() + ".xml")
-                                    arcpy.ImportMetadata_conversion(metaData, "FROM_FGDC", os.path.join(spatialFolder, muShp), "ENABLED")
-                                    del spatialFolder, muShp, metaData
-
-                            except:
-                                AddMsgAndPrint("\t\tImporting metadata for " + muShp + " Failed.  ", 2)
-                                pass
+##                            try:
+##                                if len(shpList) == 1:
+##                                    muShp = shpList[0]
+##                                    AddMsgAndPrint("\t\tImporting metadata for " + muShp)
+##                                    metaData = os.path.join(newFolder, "soil_metadata_" + areaSym.lower() + ".xml")
+##                                    arcpy.ImportMetadata_conversion(metaData, "FROM_FGDC", os.path.join(spatialFolder, muShp), "ENABLED")
+##                                    del spatialFolder, muShp, metaData
+##
+##                            except:
+##                                AddMsgAndPrint("\t\tImporting metadata for " + muShp + " Failed.  ", 2)
+##                                pass
 
                             # end of successful zip file download
                             break

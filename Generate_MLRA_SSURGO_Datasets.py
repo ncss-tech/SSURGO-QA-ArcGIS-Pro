@@ -530,7 +530,7 @@ def createFGDB(ssaOffice,outputFolder):
                 arcpy.Delete_management(os.path.join(outputFolder,newName + ".gdb"))
 
             except:
-                AddMsgAndPrint("\t Failed to Delte " + os.path.join(outputFolder,newName + ".gdb",2))
+                AddMsgAndPrint("\t Failed to Delete " + os.path.join(outputFolder,newName + ".gdb",2))
                 return ""
 
         arcpy.Rename_management(targetGDB,newName)
@@ -829,29 +829,29 @@ def splitThousands(someNumber):
 
 ## ===============================================================================================================
 def CreateTableRelationships(tblAliases):
-    # Create relationship classes between standalone attribute tables.
-    # Relate parameters are pulled from the mdstatrhipdet and mdstatrshipmas tables,
-    # thus it is required that the tables must have been copied from the template database.
+    """ Create relationship classes between standalone attribute tables.
+        Relate parameters are pulled from the mdstatrhipdet and mdstatrshipmas tables,
+        thus it is required that the tables must have been copied from the template database.
 
-    # Test option of getting aliases from original template database vs. output database
-    # set workspace to original template database
-    # env.workspace = InputDB
-    # or
-    # set workspace to output database.....This script uses output database as workspace
-    # WAIT, take that back.  Using the GDB as a workspace creates locks.  Specifically, the
-    # MakeQueryTable tool creates .rd and .sr locks that are only deleted if Arc is restarted.
-    # Currently use the ssurgoTemplate to create a query table so that it doesn't lock the .GDB
-    # Subfunction is written by Steve Peaslee and modified by Adolfo Diaz.
+        Test option of getting aliases from original template database vs. output database
+        set workspace to original template database
+        env.workspace = InputDB
+        or
+        set workspace to output database.....This script uses output database as workspace
+        WAIT, take that back.  Using the GDB as a workspace creates locks.  Specifically, the
+        MakeQueryTable tool creates .rd and .sr locks that are only deleted if Arc is restarted.
+        Currently use the ssurgoTemplate to create a query table so that it doesn't lock the .GDB
+        Subfunction is written by Steve Peaslee and modified by Adolfo Diaz. """
     #
     #Modified From Steve Peaslee's Setup_UpdateSurvey
+    env.workspace = ssurgoTemplate
 
-    #AddMsgAndPrint(" \n**********************************************************************************************************************",1)
-    #AddMsgAndPrint(" \n\tVerifying relationships",0)
-    AddMsgAndPrint("\tCreating Relationships between Featureclasses and Tables", 0)
+    AddMsgAndPrint("\n------------------------------------------------------------------------------------------------------- ")
+    AddMsgAndPrint("Verifying relationships:\n")
 
     # set progressor object which allows progress information to be passed for every relationship complete
 
-    if arcpy.Exists(os.path.join(FGDBpath, "mdstatrshipdet")) and arcpy.Exists(os.path.join(FGDBpath,"mdstatrshipmas")):
+    if arcpy.Exists(ssurgoTemplate + os.sep + "mdstatrshipdet") and arcpy.Exists(ssurgoTemplate + os.sep + "mdstatrshipmas"):
         try:
         # Create new Table View to contain results of join between relationship metadata tables
 
@@ -869,12 +869,18 @@ def CreateTableRelationships(tblAliases):
             #SQLtxt = "[" + fld1 + "] = [" + fld2 + "] AND [" + fld3 + "] = [" + fld4 + "] AND [" + fld5 + "] = [" + fld6 + "]"
 
             # Create in-memory table view to supply parameters for each relationshipclasses (using SSURGO 2.0 mdstatrshipdet and mdstatrshipmas tables)
-            inputTables = FGDBpath + os.sep + "mdstatrshipdet;" + FGDBpath + os.sep + "mdstatrshipmas"
+            inputTables = [ssurgoTemplate + os.sep + "mdstatrshipdet", ssurgoTemplate + os.sep + "mdstatrshipmas"]
             queryTableName = "RelshpInfo"
 
             # Use this one for env.workspace = FGDBpath: includes objectID but I don't think it is needed
             #fieldsList = "mdstatrshipdet.OBJECTID OBJECTID;mdstatrshipdet.ltabphyname LTABPHYNAME;mdstatrshipdet.rtabphyname RTABPHYNAME;mdstatrshipdet.relationshipname RELATIONSHIPNAME;mdstatrshipdet.ltabcolphyname LTABCOLPHYNAME;mdstatrshipdet.rtabcolphyname RTABCOLPHYNAME;mdstatrshipmas.cardinality CARDINALITY"
-            fieldsList = "mdstatrshipdet.ltabphyname LTABPHYNAME;mdstatrshipdet.rtabphyname RTABPHYNAME;mdstatrshipdet.relationshipname RELATIONSHIPNAME;mdstatrshipdet.ltabcolphyname LTABCOLPHYNAME;mdstatrshipdet.rtabcolphyname RTABCOLPHYNAME;mdstatrshipmas.cardinality CARDINALITY"
+            #fieldsList = "mdstatrshipdet.ltabphyname LTABPHYNAME;mdstatrshipdet.ltabcolphyname LTABCOLPHYNAME;mdstatrshipdet.rtabphyname RTABPHYNAME;mdstatrshipdet.rtabcolphyname RTABCOLPHYNAME;mdstatrshipdet.relationshipname RELATIONSHIPNAME;mdstatrshipmas.cardinality CARDINALITY"
+            fieldsList = [["mdstatrshipdet.ltabphyname", 'LTABPHYNAME'],
+                          ["mdstatrshipdet.ltabcolphyname", 'LTABCOLPHYNAME'],
+                          ["mdstatrshipdet.rtabphyname", 'RTABPHYNAME'],
+                          ["mdstatrshipdet.rtabcolphyname", 'RTABCOLPHYNAME'],
+                          ["mdstatrshipdet.relationshipname", 'RELATIONSHIPNAME'],
+                          ["mdstatrshipmas.cardinality", 'CARDINALITY']]
 
             arcpy.MakeQueryTable_management(inputTables, queryTableName, "NO_KEY_FIELD", "", fieldsList, SQLtxt)
 
@@ -885,137 +891,138 @@ def CreateTableRelationships(tblAliases):
             # Fields in RelshpInfo table view
             # OBJECTID, LTABPHYNAME, RTABPHYNAME, RELATIONSHIPNAME, LTABCOLPHYNAME, RTABCOLPHYNAME, CARDINALITY
             # Open table view and step through each record to retrieve relationshipclass parameters
-            rows = arcpy.SearchCursor(queryTableName)
 
-            arcpy.SetProgressor("step", "Verifying Tabular Relationships", 0, int(arcpy.GetCount_management(FGDBpath + os.sep + "mdstatrshipdet").getOutput(0)), 1)
+            arcpy.SetProgressor("step", "Verifying Tabular Relationships", 0, int(arcpy.GetCount_management(ssurgoTemplate + os.sep + "mdstatrshipdet").getOutput(0)), 1)
             arcpy.SetProgressorLabel("Verifying Tabular Relationships")
 
             recNum = 0
+            env.workspace = FGDBpath
 
-            #env.workspace = FGDBpath
+            #['mdstatrshipdet_ltabphyname', 'mdstatrshipdet_ltabcolphyname', 'mdstatrshipdet_rtabphyname', 'mdstatrshipdet_rtabcolphyname', 'mdstatrshipdet_relationshipname', 'mdstatrshipmas_cardinality']
+            queryTableFlds = [f.name for f in arcpy.ListFields(queryTableName)]
+            #queryTableFlds.remove('OBJECTID')
 
-            for row in rows:
+            with arcpy.da.SearchCursor(queryTableName, queryTableFlds) as cursor:
+                for row in cursor:
 
-                # Get relationshipclass parameters from current table row
-                # Syntax for CreateRelationshipClass_management (origin_table, destination_table,
-                # out_relationship_class, relationship_type, forward_label, backward_label,
-                # message_direction, cardinality, attributed, origin_primary_key,
-                # origin_foreign_key, destination_primary_key, destination_foreign_key)
-                #
-                #AddMsgAndPrint("Reading record " + str(recNum), 1)
-                originTable = row.LTABPHYNAME
-                destinationTable = row.RTABPHYNAME
+                    # Get relationshipclass parameters from current table row
+                    # Syntax for CreateRelationshipClass_management (origin_table, destination_table,
+                    # out_relationship_class, relationship_type, forward_label, backward_label,
+                    # message_direction, cardinality, attributed, origin_primary_key,
+                    # origin_foreign_key, destination_primary_key, destination_foreign_key)
+                    #
+                    #AddMsgAndPrint("Reading record " + str(recNum), 1)
+                    originTable = row[0]
+                    destinationTable = row[2]
 
-                originTablePath = FGDBpath + os.sep + row.LTABPHYNAME
-                destinationTablePath = FGDBpath + os.sep + row.RTABPHYNAME
+                    originTablePath = FGDBpath + os.sep + originTable
+                    destinationTablePath = FGDBpath + os.sep + destinationTable
 
-                # Use table aliases for relationship labels
-                relName = "x" + originTable.capitalize() + "_" + destinationTable.capitalize()
+                    # Use table aliases for relationship labels
+                    relName = "x" + originTable.capitalize() + "_" + destinationTable.capitalize()
 
-                originPKey = row.LTABCOLPHYNAME
-                originFKey = row.RTABCOLPHYNAME
+                    originPKey = row[1]
+                    originFKey = row[3]
 
-                # create Forward Label i.e. "> Horizon AASHTO Table"
-                if tblAliases.has_key(destinationTable):
-                    fwdLabel = "> " + tblAliases.get(destinationTable)[0] + " Table"
-
-                else:
-                    fwdLabel = destinationTable + " Table"
-                    AddMsgAndPrint("Missing key: " + destinationTable, 2)
-
-                # create Backward Label i.e. "< Horizon Table"
-                if tblAliases.has_key(originTable):
-                    backLabel = "<  " + tblAliases.get(originTable)[0] + " Table"
-
-                else:
-                    backLabel = "<  " + originTable + " Table"
-                    AddMsgAndPrint("Missing key: " + originTable, 2)
-
-                theCardinality = row.CARDINALITY.upper().replace(" ", "_")
-
-                # Check if origin and destination tables exist
-                if arcpy.Exists(originTablePath) and arcpy.Exists(destinationTablePath):
-
-                    # The following 6 lines are for formatting only
-                    formatTab1 = 15 - len(originTable)
-                    formatTabLength1 = " " * formatTab1 + "--> "
-
-                    formatTab2 = 19 - len(destinationTable)
-                    formatTabLength2 = " " * formatTab2 + "--> "
-
-                    formatTab3 = 12 - len(str(theCardinality))
-                    formatTabLength3 = " " * formatTab3 + "--> "
-
-                    # relationship already exists; print out the relationship name
-                    if arcpy.Exists(relName):
-                        AddMsgAndPrint(" \t" + originTable +  formatTabLength1 + destinationTable + formatTabLength2 + theCardinality + formatTabLength3 + relName, 0)
-
-                    # relationship does not exist; create it and print out
+                    # create Forward Label i.e. "> Horizon AASHTO Table"
+                    if destinationTable in tblAliases:
+                        fwdLabel = "> " + tblAliases.get(destinationTable)[0] + " Table"
                     else:
-                        arcpy.CreateRelationshipClass_management(originTablePath, destinationTablePath, relName, "SIMPLE", fwdLabel, backLabel, "NONE", theCardinality, "NONE", originPKey, originFKey, "","")
-                        AddMsgAndPrint(" \t" + originTable +  formatTabLength1 + destinationTable + formatTabLength2 + theCardinality + formatTabLength3 + relName, 0)
+                        fwdLabel = destinationTable + " Table"
+                        AddMsgAndPrint("Missing key: " + destinationTable, 2)
 
-                    # delete formatting variables
-                    del formatTab1, formatTabLength1, formatTab2, formatTabLength2, formatTab3, formatTabLength3
-                else:
-                    AddMsgAndPrint("        <-- " + relName + ": Missing input tables (" + originTable + " or " + destinationTable + ")", 0)
+                    # create Backward Label i.e. "< Horizon Table"
+                    if originTable in tblAliases:
+                        backLabel = "<  " + tblAliases.get(originTable)[0] + " Table"
 
-                del originTable, destinationTable, originTablePath, destinationTablePath, relName, originPKey, originFKey, fwdLabel, backLabel, theCardinality
+                    else:
+                        backLabel = "<  " + originTable + " Table"
+                        AddMsgAndPrint("Missing key: " + originTable, 2)
 
-                recNum = recNum + 1
+                    theCardinality = row[5].upper().replace(" ", "_")
 
-                arcpy.SetProgressorPosition() # Update the progressor position
+                    # Check if origin and destination tables exist
+                    if arcpy.Exists(originTablePath) and arcpy.Exists(destinationTablePath):
+
+                        # The following 6 lines are for formatting only
+                        formatTab1 = 15 - len(originTable)
+                        formatTabLength1 = " " * formatTab1 + "--> "
+
+                        formatTab2 = 19 - len(destinationTable)
+                        formatTabLength2 = " " * formatTab2 + "--> "
+
+                        formatTab3 = 12 - len(str(theCardinality))
+                        formatTabLength3 = " " * formatTab3 + "--> "
+
+                        # relationship already exists; print out the relationship name
+                        if arcpy.Exists(relName):
+                            AddMsgAndPrint("\t" + originTable +  formatTabLength1 + destinationTable + formatTabLength2 + theCardinality + formatTabLength3 + relName, 0)
+
+                        # relationship does not exist; create it and print out
+                        else:
+                            arcpy.CreateRelationshipClass_management(originTablePath, destinationTablePath, relName, "SIMPLE", fwdLabel, backLabel, "NONE", theCardinality, "NONE", originPKey, originFKey, "","")
+                            AddMsgAndPrint("\t" + originTable +  formatTabLength1 + destinationTable + formatTabLength2 + theCardinality + formatTabLength3 + relName, 0)
+
+                        # delete formatting variables
+                        del formatTab1, formatTabLength1, formatTab2, formatTabLength2, formatTab3, formatTabLength3
+                    else:
+                        AddMsgAndPrint("        <-- " + relName + ": Missing input tables (" + originTable + " or " + destinationTable + ")", 0)
+
+                    del originTable, destinationTable, originTablePath, destinationTablePath, relName, originPKey, originFKey, fwdLabel, backLabel, theCardinality
+
+                    recNum = recNum + 1
+                    arcpy.SetProgressorPosition() # Update the progressor position
 
             arcpy.ResetProgressor()  # Resets the progressor back to is initial state
             arcpy.SetProgressorLabel(" ")
 
-            del fld2, fld1, fld3, fld4, fld5, fld6, SQLtxt, inputTables, fieldsList, queryTableName, rows, recNum
+            #del fld2, fld1, fld3, fld4, fld5, fld6, SQLtxt, inputTables, fieldsList, queryTableName, recNum
 
             # Establish Relationship between tables and Spatial layers
             # The following lines are for formatting only
             formatTab1 = 15 - len(soilFC)
             formatTabLength1 = " " * formatTab1 + "--> "
 
-            #AddMsgAndPrint(" \nCreating Relationships between Featureclasses and Tables:", 1)
+            AddMsgAndPrint("\nCreating Relationships between spatial feature classes and tables:")
 
             # Relationship between MUPOLYGON --> Mapunit Table
             if not arcpy.Exists("xSpatial_MUPOLYGON_Mapunit"):
                 arcpy.CreateRelationshipClass_management(FGDBpath + os.sep + soilFC, FGDBpath + os.sep + "mapunit", FGDBpath + os.sep + "xSpatial_MUPOLYGON_Mapunit", "SIMPLE", "> Mapunit Table", "< MUPOLYGON_Spatial", "NONE","ONE_TO_ONE", "NONE","MUKEY","mukey", "","")
-            #AddMsgAndPrint(" \t" + soilFC + formatTabLength1 + "mapunit" + "            --> " + "ONE_TO_ONE" + "  --> " + "xSpatial_MUPOLYGON_Mapunit", 0)
+            AddMsgAndPrint("\t" + soilFC + formatTabLength1 + "mapunit" + "            --> " + "ONE_TO_ONE" + "  --> " + "xSpatial_MUPOLYGON_Mapunit", 0)
 
             # Relationship between MUPOLYGON --> Mapunit Aggregate Table
             if not arcpy.Exists("xSpatial_MUPOLYGON_Muaggatt"):
                 arcpy.CreateRelationshipClass_management(FGDBpath + os.sep + soilFC, FGDBpath + os.sep + "muaggatt", FGDBpath + os.sep + "xSpatial_MUPOLYGON_Muaggatt", "SIMPLE", "> Mapunit Aggregate Table", "< MUPOLYGON_Spatial", "NONE","ONE_TO_ONE", "NONE","MUKEY","mukey", "","")
-            #AddMsgAndPrint(" \t" + soilFC + formatTabLength1 + "muaggatt" + "           --> " + "ONE_TO_ONE" + "  --> " + "xSpatial_MUPOLYGON_Muaggatt", 0)
+            AddMsgAndPrint("\t" + soilFC + formatTabLength1 + "muaggatt" + "           --> " + "ONE_TO_ONE" + "  --> " + "xSpatial_MUPOLYGON_Muaggatt", 0)
 
-            # Relationship between SAPOLYGON --> Legend Table
+			# Relationship between SAPOLYGON --> Legend Table
             if not arcpy.Exists("xSpatial_SAPOLYGON_Legend"):
                 arcpy.CreateRelationshipClass_management(FGDBpath + os.sep + soilSaFC, FGDBpath + os.sep + "legend", FGDBpath + os.sep + "xSpatial_SAPOLYGON_Legend", "SIMPLE", "> Legend Table", "< SAPOLYGON_Spatial", "NONE","ONE_TO_ONE", "NONE","LKEY","lkey", "","")
-            #AddMsgAndPrint(" \t" + soilSaFC + formatTabLength1 + "legend" + "             --> " + "ONE_TO_ONE" + "  --> " + "xSpatial_SAPOLYGON_Legend", 0)
+            AddMsgAndPrint("\t" + soilSaFC + formatTabLength1 + "legend" + "            --> " + "ONE_TO_ONE" + "  --> " + "xSpatial_SAPOLYGON_Legend", 0)
 
-            # Relationship between MULINE --> Mapunit Table
+			# Relationship between MULINE --> Mapunit Table
             if not arcpy.Exists("xSpatial_MULINE_Mapunit"):
                 arcpy.CreateRelationshipClass_management(FGDBpath + os.sep + muLineFC, FGDBpath + os.sep + "mapunit", FGDBpath + os.sep + "xSpatial_MULINE_Mapunit", "SIMPLE", "> Mapunit Table", "< MULINE_Spatial", "NONE","ONE_TO_ONE", "NONE","MUKEY","mukey", "","")
-            #AddMsgAndPrint(" \t" + muLineFC + "         --> mapunit" + "            --> " + "ONE_TO_ONE" + "  --> " + "xSpatial_MULINE_Mapunit", 0)
+            AddMsgAndPrint("\t" + muLineFC + formatTabLength1 + "mapunit" + "            --> " + "ONE_TO_ONE" + "  --> " + "xSpatial_MULINE_Mapunit", 0)
 
-            # Relationship between MUPOINT --> Mapunit Table
+			# Relationship between MUPOINT --> Mapunit Table
             if not arcpy.Exists("xSpatial_MUPOINT_Mapunit"):
                 arcpy.CreateRelationshipClass_management(FGDBpath + os.sep + muPointFC, FGDBpath + os.sep + "mapunit", FGDBpath + os.sep + "xSpatial_MUPOINT_Mapunit", "SIMPLE", "> Mapunit Table", "< MUPOINT_Spatial", "NONE","ONE_TO_ONE", "NONE","MUKEY","mukey", "","")
-            #AddMsgAndPrint(" \t" + muPointFC + "        --> mapunit" + "            --> " + "ONE_TO_ONE" + "  --> " + "xSpatial_MUPOINT_Mapunit", 0)
+            AddMsgAndPrint("\t" + muPointFC + formatTabLength1 + "mapunit" + "            --> " + "ONE_TO_ONE" + "  --> " + "xSpatial_MUPOINT_Mapunit", 0)
 
-            # Relationship between FEATLINE --> Featdesc Table
+			# Relationship between FEATLINE --> Featdesc Table
             if not arcpy.Exists("xSpatial_FEATLINE_Featdesc"):
                 arcpy.CreateRelationshipClass_management(FGDBpath + os.sep + featLineFC, FGDBpath + os.sep + "featdesc", FGDBpath + os.sep + "xSpatial_FEATLINE_Featdesc", "SIMPLE", "> Featdesc Table", "< FEATLINE_Spatial", "NONE","ONE_TO_ONE", "NONE","FEATKEY","featkey", "","")
-            #AddMsgAndPrint(" \t" + featLineFC + "       --> featdesc" + "           --> " + "ONE_TO_ONE" + "  --> " + "xSpatial_FEATLINE_Featdesc", 0)
+            AddMsgAndPrint("\t" + featLineFC + formatTabLength1 + "featdesc" + "            --> " + "ONE_TO_ONE" + "  --> " + "xSpatial_FEATLINE_Featdesc", 0)
 
-            # Relationship between FEATPOINT --> Featdesc Table
+			# Relationship between FEATPOINT --> Featdesc Table
             if not arcpy.Exists("xSpatial_FEATPOINT_Featdesc"):
                 arcpy.CreateRelationshipClass_management(FGDBpath + os.sep + featPointFC, FGDBpath + os.sep + "featdesc", FGDBpath + os.sep + "xSpatial_FEATPOINT_Featdesc", "SIMPLE", "> Featdesc Table", "< FEATPOINT_Spatial", "NONE","ONE_TO_ONE", "NONE","FEATKEY","featkey", "","")
-            #AddMsgAndPrint(" \t" + featPointFC + formatTabLength1 + "featdesc" + "           --> " + "ONE_TO_ONE" + "  --> " + "xSpatial_FEATPOINT_Featdesc", 0)
+            AddMsgAndPrint("\t" + featPointFC + formatTabLength1 + "featdesc" + "            --> " + "ONE_TO_ONE" + "  --> " + "xSpatial_FEATPOINT_Featdesc", 0)
 
             del formatTab1, formatTabLength1
 
-            #AddMsgAndPrint(" \n\tSuccessfully Created Table Relationships", 1)
+            AddMsgAndPrint("\nSuccessfully Created Table Relationships", 0)
             return True
 
         except arcpy.ExecuteError:
@@ -1028,7 +1035,6 @@ def CreateTableRelationships(tblAliases):
 
     else:
         AddMsgAndPrint("\tMissing at least one of the relationship metadata tables", 2)
-
         return False
 
 ## ===============================================================================================================
@@ -1527,8 +1533,6 @@ if __name__ == '__main__':
             AddMsgAndPrint("\t\tTotal # of Special Feature Points: " + str(splitThousands(arcpy.GetCount_management(FGDBpath + os.sep + featPointFC).getOutput(0))),0)
             AddMsgAndPrint("\t\tTotal # of Special Feature Lines: " + str(splitThousands(arcpy.GetCount_management(FGDBpath + os.sep + featLineFC).getOutput(0))),0)
             AddMsgAndPrint("\n",0)
-
-            arcpy.RefreshCatalog(outputFolder)
 
     # This is where the fun ends!
     except:
