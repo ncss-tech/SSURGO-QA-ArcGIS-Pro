@@ -87,7 +87,7 @@ def getRegionalAreaSymbolList(ssurgoSSApath, userRegionChoice):
         areaSymbolList = []
 
         if userRegionChoice == 'CONUS':
-            whereClause = "\"CONUS\" = \"CONUS\""
+            whereClause = "CONUS = 'CONUS'"
 
         else:
             whereClause = "\"Region_Download\" = '" + userRegionChoice + "'"
