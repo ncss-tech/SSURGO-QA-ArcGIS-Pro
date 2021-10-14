@@ -149,6 +149,11 @@
 #
 # Beginning of Functions
 
+# ==========================================================================================
+# Updated  10/13/2021 - Adolfo Diaz
+#
+# - Added csv.field_size_limit(min(sys.maxsize, 2147483646)) to the importTabularData function
+
 ## ================================================================================================================
 def errorMsg():
     try:
@@ -504,6 +509,7 @@ def importTabularData(tabularFolder, tblAliases, queue):
                         # The csv file might contain very huge fields, therefore increase the field_size_limit:
                         # Exception thrown with IL177 in legend.txt.  Not sure why, only 1 record was present
                         #csv.field_size_limit(sys.maxsize)
+                        csv.field_size_limit(min(sys.maxsize, 2147483646))
 
                         # Number of records in the SSURGO text file
                         textFileRecords = sum(1 for row in csv.reader(open(txtPath, 'r'), delimiter='|', quotechar='"'))
