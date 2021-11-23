@@ -105,7 +105,7 @@ def Number_Format(num, places=0, bCommas=True):
         return ""
 
 ## ===================================================================================
-def getRegionalAreaSymbolList(ssaTable, masterTable, userRegionChoice):
+def getRegionalAreaSymbolList(regionBufferTable, masterTable, userRegionChoice):
 # Returns the actual region number from the first parameter.
 # If the value has 1 integer than it should total 8 characters,
 # last character will be returned.  Otherwise, value has 2 integers
@@ -118,7 +118,7 @@ def getRegionalAreaSymbolList(ssaTable, masterTable, userRegionChoice):
 
         where_clause = "\"Region_Download\" = '" + userRegionChoice + "'"
 
-        with arcpy.da.SearchCursor(ssaTable, ('AREASYMBOL'), where_clause) as cursor:
+        with arcpy.da.SearchCursor(regionBufferTable, ('AREASYMBOL'), where_clause) as cursor:
             for row in cursor:
                 areaSymbolList.append(row[0])
 
@@ -127,7 +127,7 @@ def getRegionalAreaSymbolList(ssaTable, masterTable, userRegionChoice):
         else:
             region = userRegionChoice[-2:]
 
-        where_clause = "\"Region\" = " + str(region)
+        where_clause = "\"Region_Ownership\" = " + str(region)
         numOfRegionalSSA = len([row[0] for row in arcpy.da.SearchCursor(masterTable, ('AREASYMBOL'), where_clause)])
 
         return areaSymbolList,numOfRegionalSSA
@@ -382,7 +382,7 @@ if __name__ == '__main__':
 
         # Path to the regional table that contains SSAs by region with extra extent and master table
         regionalTable = os.path.dirname(sys.argv[0]) + os.sep + "SSURGO_Soil_Survey_Area.gdb\SSA_by_Region_buffer"
-        masterTable = os.path.dirname(sys.argv[0]) + os.sep + "SSURGO_Soil_Survey_Area.gdb\SSA_Regional_Ownership_MASTER"
+        masterTable = os.path.dirname(sys.argv[0]) + os.sep + "SSURGO_Soil_Survey_Area.gdb\soilsa_a_nrcs"
 
         # set workspace to output folder
         env.workspace = outputFolder
