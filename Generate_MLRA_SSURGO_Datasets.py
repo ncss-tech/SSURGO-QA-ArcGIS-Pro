@@ -236,6 +236,28 @@ def validateSSAs(surveyList, wssLibrary):
 # {'ID001': 'C:\\Temp\\junk\\soils_id001', 'ID002': 'C:\\Temp\\junk\\wss_SSA_ID002_soildb_ID_2003_[2012-08-13]}'
 
     try:
+
+        ## ===================================================================================
+        def isValidWSSfolder(folder):
+
+            try:
+                stateAbbrev = folder[0:2] # WI
+                surveyID = folder[-3:]    # 001
+
+                if not stateAbbrev.isalpha():
+                    return False
+
+                try:
+                    int(surveyID)
+                except:
+                    return False
+
+                return True
+
+            except:
+                return False
+        ## ===================================================================================
+
         import collections
 
         ssurgoDatasetDict = dict()  # [AreaSymbol] = C:\Temp\junk\soils_ca688
@@ -250,13 +272,21 @@ def validateSSAs(surveyList, wssLibrary):
             # extract areasymbol name if file is a directory and a ssurgo dataset
             if os.path.isdir(filePath):
 
+                # folder is named according to current WSS format i.e. WI001
+                if len(file) == 5:
+                    if isValidWSSfolder(file):
+                        wssLibraryList.append(file)
+
+                    if file in surveyList:
+                        ssurgoDatasetDict[file] = filePath
+
                 # folder is named in WSS 3.0 format i.e. 'wss_SSA_WI063_soildb_WI_2003_[2012-06-27]'
-                if file.find("wss_SSA_") > -1:
+                elif file.find("wss_SSA_") > -1:
                     SSA = file[file.find("SSA_") + 4:file.find("soildb")-1].upper()
                     wssLibraryList.append(SSA)
 
                     if SSA in surveyList:
-                        ssurgoDatasetDict[SSA] = os.path.join(wssLibrary,file)
+                        ssurgoDatasetDict[SSA] = filePath
                     del SSA
 
                 # folder is named according to traditional SDM format i.e. 'soils_wa001'
@@ -265,7 +295,7 @@ def validateSSAs(surveyList, wssLibrary):
                     wssLibraryList.append(SSA)
 
                     if SSA in surveyList:
-                        ssurgoDatasetDict[SSA] = os.path.join(wssLibrary,file)
+                        ssurgoDatasetDict[SSA] = filePath
                     del SSA
 
                 # Not a SSURGO dataset; some other folder
