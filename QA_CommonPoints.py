@@ -46,6 +46,14 @@
 # - Encountered a bug when adding .lyrx file to arcgis pro.  A variable was incorrectly defined.
 # - Added additional checks to make sure layer was added to correct ArcGIS Pro Map instead of the first one.
 
+# ==========================================================================================
+# Updated  4/29/2022 - Adolfo Diaz
+#
+# - Encountered a bug when adding results lyrx to arcgis pro.  In the situation where there were mulitple
+#   maps and layers and 1 of the layers was a WFS, layer.name is not able to produce the name for that layer
+#   causing the tool to fail.  isFeatureLayer method was introduced to only look at feature layers.
+# - converted all AddMsgAndpPrint strings to f-strings.
+
 # ==============================================================================================================================
 def AddMsgAndPrint(msg, severity=0):
     # prints message to screen if run as a python script
@@ -179,7 +187,7 @@ def MakeOutLayer(inLayer, sr, inField1, inField2, fldLength):
         if arcpy.Exists(outLayer):
             arcpy.Delete_management(outLayer)
 
-        AddMsgAndPrint("\nOutput featureclass: " + outLayer + " in " + env.workspace + " " + inputDT.lower())
+        AddMsgAndPrint(f".\nOutput featureclass: {outLayer} in {env.workspace} {inputDT.lower()}")
 
         # Create output point featureclass
         arcpy.CreateFeatureclass_management(env.workspace, outLayer, "POINT", "", "DISABLED", "DISABLED", sr)
@@ -215,9 +223,9 @@ def AddLayerToArcGISPro(lyrToSym,symbologyLyr,newLyrName=False):
     # path of the datasource that w
 
     # Parameters:
-    # inLayer - catalog path to the layer that will be symbolized using
-    #                 a .lyrx file.  This layer can be a FGDB feature class,
-    #                 shapefile or layer created using the 'MakeFeatureLayer' tool
+    # lyrToSym     - catalog path to the layer that will be symbolized using
+    #                a .lyrx file.  This layer can be a FGDB feature class,
+    #                shapefile or layer created using the 'MakeFeatureLayer' tool
     # symbologyLry - catalog path to the symbology file that will be used to symbolize the
     #                fcToSymbolize layer.  The file can be a .lyr or .lyrx.  If the symbology
     #                file is an .lyr then a .lyrx will be created to avoid problems with
@@ -247,9 +255,10 @@ def AddLayerToArcGISPro(lyrToSym,symbologyLyr,newLyrName=False):
         if len(aprxMap) > 1:
             for map in aprxMap:
                 for layer in map.listLayers():
-                    if inputName == layer.name:
-                        currentMap = map
-                        break
+                    if layer.isFeatureLayer:
+                        if inputName == layer.name:
+                            currentMap = map
+                            break
         else:
             currentMap = aprx.listMaps('*')[0]
 
@@ -279,6 +288,7 @@ def AddLayerToArcGISPro(lyrToSym,symbologyLyr,newLyrName=False):
 
             # Add layer to active map
             currentMap.addLayer(lyrxObject,"TOP")
+            AddMsgAndPrint(f".\nSuccessfully added {lyrxObject.name} to your '{currentMap.name}' ArcGIS Pro Map")
 
             # Rename newly added layer to user
             if newLyrName:
@@ -329,16 +339,13 @@ if __name__ == '__main__':
         if inputDT == "FEATURECLASS":
             # swap out the input featureclass for a new featurelayer based upon that featureclass
             inLayer = desc['name'] + " Layer"
-            AddMsgAndPrint(" \nCreating new featurelayer named: " + inLayer)
+            AddMsgAndPrint(".\nCreating new featurelayer named: " + inLayer)
             inputFC = desc['catalogPath']
             arcpy.MakeFeatureLayer_management(inputFC, inLayer)
 
         elif inputDT == "FEATURELAYER":
             inputName = desc['name']
             inputFC = desc['catalogPath']
-
-        # Use a searchcursor to create a list of unique values for the specified input field or column
-        AddMsgAndPrint("\nGetting unique values for " + inField1 + "...")
 
         # get the first input field object
         #chkFields = arcpy.ListFields(inputFC)
@@ -371,22 +378,24 @@ if __name__ == '__main__':
         fldList = [fld1Name]
 
         if inField2 == "":
+            AddMsgAndPrint(f".\nGetting unique values for {inField1}")
             valList = [row[0] for row in arcpy.da.SearchCursor(inLayer, fldList)]
 
         else:
+            AddMsgAndPrint(f".\nGetting unique values for {inField1}-{inField2}")
             fldList = [fld2Name, fld1Name]
             valList = [row[0] + ":" + row[1] for row in arcpy.da.SearchCursor(inLayer, fldList)]
 
         valUnique = set(valList)   # remove duplicate attribute values
         valList = list(valUnique)
         valList.sort()    # sort the list to control the processing order, this is not really necessary
-        AddMsgAndPrint("\nFound " + splitThousands(len(valList)) + " unique values")
+        AddMsgAndPrint(f".\tFound {splitThousands(len(valList))} unique values")
         iVals = len(valList)
 
         # Process records using a series of search cursors while tracking progress
         arcpy.SetProgressorLabel("Reading polygon geometry...")
         arcpy.SetProgressor("step", "Reading polygon geometry...",  0, iVals, 1)
-        AddMsgAndPrint("\nProcessing " + splitThousands(iSelection) + " polygons in '" + inLayer + "'")
+        AddMsgAndPrint(f".\nProcessing {splitThousands(iSelection)} polygons in '{inLayer}'")
 
         iCnt = 0
 
@@ -434,10 +443,10 @@ if __name__ == '__main__':
                     iCnt += len(dupList)   # keep track of the total number of common-points
 
                     if val == " ":
-                        AddMsgAndPrint(" \n\tFound common points for " + inField1 + ":  <NULL>")
+                        AddMsgAndPrint(f".\tFound common points for {inField1}:  <NULL>")
 
                     else:
-                        AddMsgAndPrint(" \n\tFound common points for " + inField1 + ":  '" + val + "'")
+                        AddMsgAndPrint(f".\tFound common points for {inField1}: '{val}'")
 
                     arcpy.SetProgressorLabel("Reading polygon geometry ( flagged " + splitThousands(iCnt) + " locations )...")
 
@@ -447,13 +456,13 @@ if __name__ == '__main__':
 
         # if common-points were found, create a point shapefile containing the attribute value for each point
         if len(dDups) > 0:
-            AddMsgAndPrint("Total of " + splitThousands(iCnt) + " 'common points' found in " + inLayer, 2)
+            AddMsgAndPrint(f".\nTotal of {splitThousands(iCnt)} 'common points' found in {inLayer}")
 
             # create output points layer to store common-point locations
             outLayer, newFld1 =  MakeOutLayer(inLayer, sr, inField1, inField2, fldLength)
 
             if outLayer == "":
-                AddMsgAndPrint("Failed to create common-points layer",2)
+                AddMsgAndPrint(f".\nFailed to create common-points layer",2)
                 exit()
 
             # Process records using cursor, track progress
@@ -484,9 +493,8 @@ if __name__ == '__main__':
 
             AddLayerToArcGISPro(outLayer,lyrxFile,outLayerName)
 
-
         else:
-            AddMsgAndPrint("\nNo common-point issues found with '" + inLayer + "' \n ")
+            AddMsgAndPrint(f".\nNo common-point issues found with '{inLayer}'\n ")
 
     except:
         errorMsg()
