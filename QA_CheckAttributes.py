@@ -53,6 +53,13 @@
 # - Removed ascii encoding of Areasymbol values b/c it was throwing an HTTP error.
 # - Completely rewrote the processLayer function (Now the checkSSURGOAttributesFormat function)
 
+# ==========================================================================================
+# Updated  5/16/2022 - Adolfo Diaz
+#
+# - There was an error with the checkSSURGOAttributeFormat function with NULLS in the
+#   AREASYMBOL field.  Error occurred with NULL areasymbos so I updated code to find
+#   Nulls to "val in [None, '', ' ', 'Null']:"
+
 # ==============================================================================================================================
 def AddMsgAndPrint(msg, severity=0):
     # prints message to screen if run as a python script
@@ -132,68 +139,23 @@ def CheckAreasymbols(asList):
         for areaSym in data.get('Table'):
             valList.append(areaSym[0])
 
-        """ ---------------------------------------------- This is the Original SOAP request to the SDMAccess; Replaced by a POST REST request -------------------------------------------------"""
-##        # Send XML query to SDM Access service
-##        #
-##        sXML = """<?xml version="1.0" encoding="utf-8"?>
-##    <soap12:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap12="http://www.w3.org/2003/05/soap-envelope">
-##      <soap12:Body>
-##        <RunQuery xmlns="http://SDMDataAccess.nrcs.usda.gov/Tabular/SDMTabularService.asmx">
-##          <Query>""" + sQuery + """</Query>
-##        </RunQuery>
-##      </soap12:Body>
-##    </soap12:Envelope>"""
-##
-##        dHeaders = dict()
-##        dHeaders["Host"] = "sdmdataaccess.nrcs.usda.gov"
-##        #dHeaders["User-Agent"] = "NuSOAP/0.7.3 (1.114)"
-##        #dHeaders["Content-Type"] = "application/soap+xml; charset=utf-8"
-##        dHeaders["Content-Type"] = "text/xml; charset=utf-8"
-##        dHeaders["SOAPAction"] = "http://SDMDataAccess.nrcs.usda.gov/Tabular/SDMTabularService.asmx/RunQuery"
-##        dHeaders["Content-Length"] = len(sXML)
-##        sURL = "SDMDataAccess.nrcs.usda.gov"
-##
-##        # Create SDM connection to service using HTTP
-##        conn = httplib.HTTPConnection(sURL, 80)
-##        # Send request in XML-Soap
-##        conn.request("POST", "/Tabular/SDMTabularService.asmx", sXML, dHeaders)
-##
-##        # Get back XML response
-##        response = conn.getresponse()
-##        xmlString = response.read()
-##
-##        # Close connection to SDM
-##        conn.close()
-##
-##        # Convert XML to tree format
-##        tree = ET.fromstring(xmlString)
-##        iCnt = 0
-##        valList = list()
-##
-##        # Iterate through XML tree, finding required elements...
-##        for rec in tree.iter():
-##
-##            if rec.tag == "AREASYMBOL":
-##                areasym = str(rec.text)
-##                valList.append(areasym)
-
         if len(valList) > 0:
             # Got at least one match back from Soil Data Access
             # Loop through and compare to the original list from the spatial
             if len(asList) > len(valList):
                 # Incomplete match, look at each to find the problem(s)
                 missingList = [x for x in asList if not x in valList]
-                AddMsgAndPrint("\n\tThe following Areasymbol(s) do not match in Web Soil Survey: " + ", ".join(missingList), 1)
+                AddMsgAndPrint(".\n\tThe following Areasymbol(s) do not match in Web Soil Survey: " + ", ".join(missingList), 1)
                 return False
 
             else:
                 # Number of areasymbols match, should be good
-                AddMsgAndPrint("\tAll areasymbol values in spatial data have a match in Web Soil Survey")
+                AddMsgAndPrint(".\tAll areasymbol values in spatial data have a match in Web Soil Survey")
                 return True
 
         else:
             # Failed to find a match for any surveys
-            AddMsgAndPrint("\nFailed to find a match for any of the input Areasymbols",2)
+            AddMsgAndPrint(".\nFailed to find a match for any of the input Areasymbols",2)
             return False
 
     except:
@@ -246,8 +208,12 @@ def checkSSURGOAttributesFormat(inLayer, inFields):
                     # Handle Areasymbol differently because it has more specific criteria
                     if fldName == "AREASYMBOL":
 
-                        # Areasymbol must be 5 characters
-                        if not len(val) == 5:
+                        # Areasymbol record is Null
+                        if val in [None, '', ' ', 'Null']:
+                            badAreaSymbolList.append([fid,"NULL"])
+
+                        # Areasymbol is not 5 characters
+                        elif not len(val) == 5:
                             if len(val.strip()) == 0:
                                 badAreaSymbolList.append([fid,"NULL"])
                             else:
@@ -274,8 +240,8 @@ def checkSSURGOAttributesFormat(inLayer, inFields):
                     # Check other attribute (MUSYM or MUKEY)
                     # All we know is it is text field, don't know specifics
                     else:
-                        # fld must be populated
-                        if len(val) < 1 or val == " ":
+                        # record is Null
+                        if val in [None, '', ' ', 'Null'] or len(val) < 1:
                             badFldValueList.append([fid,fldName,"NULL"])
 
                         # Value cannot have spaces
@@ -317,13 +283,13 @@ def checkSSURGOAttributesFormat(inLayer, inFields):
         # Validate AREASYMBOLs against WSS if it was one of the fields
         # What about Initial Soil Surveys with a new AREASYMBOL?
         if "AREASYMBOL" in fieldList and len(asList):
-            AddMsgAndPrint("\nValidating " + str(len(asList)) + " Areasymbol(s) against Web Soil Survey")
+            AddMsgAndPrint(".\nValidating " + str(len(asList)) + " Areasymbol(s) against Web Soil Survey")
             bValid = CheckAreasymbols(asList)
 
-        if not badAreaSymbolList or not badFldValueList:
-            return True
-        else:
+        if len(badAreaSymbolList) > 0 or len(badFldValueList) > 0:
             return False
+        else:
+            return True
 
     except:
         errorMsg()
@@ -358,13 +324,13 @@ if __name__ == '__main__':
             # input layer is a featureclass, get featureclass specific information
             fc = inLayer
 
-        AddMsgAndPrint("\nLooking for attribute value problems in layer: " + inputName)
+        AddMsgAndPrint(".\nLooking for attribute value problems in layer: " + inputName)
         bGood = checkSSURGOAttributesFormat(fc, inFields)
 
         if bGood:
-            AddMsgAndPrint("\nProcessing complete with no attribute formatting errors found\n")
+            AddMsgAndPrint(".\nProcessing complete with no attribute formatting errors found")
         else:
-            AddMsgAndPrint("\nProcessing complete, but attribute formatting errors were found\n",2)
+            AddMsgAndPrint(".\nProcessing complete, but attribute formatting errors were found",2)
 
     except:
         errorMsg()
