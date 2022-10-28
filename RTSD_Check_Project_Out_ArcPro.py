@@ -99,7 +99,7 @@ def RTSDprojectExists(prjRecordFCpath,selectedProjects):
 
                 # All projects already exist in RTSD
                 if len(projectsToCheckout) == 0:
-                    return ""
+                    return False
 
                 # Some projects already existed in RTSD
                 elif len(projectsToCheckout) < selectedProjectsCnt:
@@ -116,7 +116,8 @@ def RTSDprojectExists(prjRecordFCpath,selectedProjects):
                 os.exit()
 
         else:
-            ExitError("Project_Record feature class not found...EXITING")
+            AddMsgAndPrint("Project_Record feature class not found...EXITING",2)
+            return False
 
     except:
         errorMsg()
@@ -449,7 +450,7 @@ try:
 
         if not arcpy.Exists(regionOwnership):
             AddMsgAndPrint("Region ownership layer was not found under " + os.path.dirname(sys.argv[0]),2)
-            os.exit()
+            exit()
 
         searchString = searchString.replace("&","?").replace("*","%")   # Replace '&' for '?';ampersand in project named messed up URL parameter
 
@@ -464,9 +465,9 @@ try:
         prjRecordFCpath = arcpy.Describe(prjRecordFC).CatalogPath
         verifiedProjects = RTSDprojectExists(prjRecordFCpath, selectedProjects) #
 
-        if verifiedProjects == "":
+        if not verifiedProjects:
             AddMsgAndPrint("\n\tAll selected projects are already checked out!",2)
-            os.exit()
+            exit()
 
         for project in verifiedProjects:
 
@@ -487,10 +488,7 @@ try:
                     except:
                         AddMsgAndPrint("\n" + project + ".lyr file was created for reference",0)
 
-        AddMsgAndPrint(" \n",0)
-
-except ExitError, e:
-    AddMsgAndPrint(str(e) + " \n", 2)
+        AddMsgAndPrint(".\n")
 
 except:
     errorMsg()

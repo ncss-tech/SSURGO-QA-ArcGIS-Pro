@@ -148,9 +148,17 @@ def validateSSAs(surveyList, wssLibrary):
                         ssurgoDatasetDict[SSA] = filePath
                     del SSA
 
-                # folder is name in plural format instead of singular.  Accident!!!
+                # folder is named in plural format instead of singular.  Accident!!!
                 elif file.find("soils_") > -1:
                     SSA = file[-5:].upper()
+                    wssLibraryList.append(SSA)
+
+                    if SSA in surveyList:
+                        ssurgoDatasetDict[SSA] = filePath
+                    del SSA
+
+                elif len(file) == 5:
+                    SSA = file
                     wssLibraryList.append(SSA)
 
                     if SSA in surveyList:
@@ -777,11 +785,11 @@ if __name__ == '__main__':
 
     # Parameter # 2: (Required) Input Directory where the new FGDB will be created.
     outputFolder = arcpy.GetParameterAsText(1)
-    #outputFolder = r'K:\SSURGO_CONUS_RTSD_FY2020'
+    #outputFolder = r'E:\SSURGO\export'
 
     # Parameter # 2: (Required) Input Directory where the original SDM spatial and tabular data exist.
     wssLibrary = arcpy.GetParameterAsText(2)
-    #wssLibrary = r'O:\SSURGO_2020_new'
+    #wssLibrary = r'F:\2022_SSURGO'
 
     # Path to the Master Regional table that contains SSAs by region with extra extent
     #regionalTable = os.path.dirname(sys.argv[0]) + os.sep + "SSURGO_Soil_Survey_Area.gdb\junkTable"
