@@ -1,717 +1,905 @@
-# Create_Regional_Transactional_FGDB
-# Created on: 1/16/2014
+#! /usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Create_Regional_Transactional_FGDB
+A tool for the SSURGO QA ArcGISPro arctoolbox
+Created on: 1/16/2014
 
-# Author: Adolfo.Diaz
-#         GIS Specialist
-#         National Soil Survey Center
-#         USDA - NRCS
-# e-mail: adolfo.diaz@usda.gov
-# phone: 608.662.4422 ext. 216
-#
-# Last Modified:  10/24/2017
+@author: Alexander Stum
+@author: Adolfo Diaz
+@maintainer: Alexander Stum
+    @title:  GIS Specialist & Soil Scientist
+    @organization: National Soil Survey Center, USDA-NRCS
+    @email: alexander.stum@usda.gov
 
-# Updated  10/27/2020 - Adolfo Diaz
+@modified 11/03/2023
+    @by: Alexnder Stum
+@version: 2.2
 
-# ==========================================================================================
-# Updated  3/17/2020 - Adolfo Diaz
-# - Updated and Tested for ArcGIS Pro 2.5.2 and python 3.6
-# - All describe functions use the arcpy.da.Describe functionality.
-# - All intermediate datasets are written to "in_memory" instead of written to a FGDB and
-#   and later deleted.  This avoids having to check and delete intermediate data during every
-#   execution.
-# - All cursors were updated to arcpy.da
-# - Added code to remove layers from an .aprx rather than simply deleting them
-# - Updated AddMsgAndPrint to remove ArcGIS 10 boolean and gp function
-# - Updated errorMsg() Traceback functions slightly changed for Python 3.6.
-# - Added parallel processing factor environment
-# - swithced from sys.exit() to exit()
-# - All gp functions were translated to arcpy
-# - Every function including main is in a try/except clause
-# - Main code is wrapped in if __name__ == '__main__': even though script will never be
-#   used as independent library.
-# - Normal messages are no longer Warnings unnecessarily.
+# ---
+Updated 11/03/2023 - Alexander Stum
+- Instead of erroring out if a survey is not in the ssurgo source folder, it 
+calls the query_download module and downloads that survey to the source folder.
+- Added getDownloadString function to facilitate the query_download call. 
+Requires sending a query to SDA to get SSA stage date to form url.
 
-# ==========================================================================================
-# Updated  10/5/2021 - Adolfo Diaz
-# Updated XML workspaces to reflect new coordinate systems.
+# ---
+Updated 10/11/2023 - Alexander Stum
+- Message that featdesc has been populated, even when importFeatdesc
+returns an Error, fixed.
+- Fixed bugs in createTopology function, requires explicit paths of features
+when adding rules.
+- Fixed references to xml files
 
-## ================================================================================================================
-def errorMsg():
+# ---
+Updated  09/30/2023 - Alexander Stum
+- Rewrote getRegionalAreaSymbolList function to dynamically get soil survey 
+legend assignment from a LIMs report validates whether valide downloads exist; 
+and renamed it getSSARegionDict
+- Added appendFeature function and removed all functionality in main related
+to spatial sorting and appending features.
+- Updated createFGDB function with new regional nomenclature, cleaned it up
+- Added pyErr function to format error messages raised by python exceptions.
+- Added arcpyErr function to format errors raised by arcpy exceptions.
+- And removed errorMsg
+- Rewrote updateAliasNames
+- cleaned up createTopology function
+- Added concurrently function to run functions in parallel
+- Removed parseDatumAndProjection function as it is obsolete.
+- Removed validateSSAs as that fuctionality is assumed by
+- Removed splitThousands function and use f"{value:,}" instead
+- Removed AddMsgAndPrint and replaced with arcpy AddMessage, AddWarning, and
+AddError
+- Replace function ImportFeatureFiles with importFeatdesc
+getRegionalAreaSymbolDict
+
+# ---
+Updated  10/5/2021 - Adolfo Diaz
+Updated XML workspaces to reflect new coordinate systems.
+
+# ---
+Updated  3/17/2020 - Adolfo Diaz
+- Updated and Tested for ArcGIS Pro 2.5.2 and python 3.6
+- All describe functions use the arcpy.da.Describe functionality.
+- All intermediate datasets are written to "in_memory" instead of written to a 
+FGDB and
+  and later deleted.  This avoids having to check and delete intermediate data 
+  during every
+  execution.
+- All cursors were updated to arcpy.da
+- Added code to remove layers from an .aprx rather than simply deleting them
+- Updated AddMsgAndPrint to remove ArcGIS 10 boolean and gp function
+- Updated errorMsg() Traceback functions slightly changed for Python 3.6.
+- Added parallel processing factor environment
+- swithced from sys.exit() to exit()
+- All gp functions were translated to arcpy
+- Every function including main is in a try/except clause
+- Main code is wrapped in if __name__ == '__main__': even though script will 
+never be used as independent library.
+- Normal messages are no longer Warnings unnecessarily.
+"""
+
+import arcpy
+import sys
+import os
+import datetime
+import re
+import traceback
+import csv
+import requests
+import json
+import pandas as pd
+from arcpy import env
+from datetime import datetime
+import concurrent.futures as cf
+import itertools as it
+from urllib.request import urlopen
+from importlib import reload
+import query_download
+reload(query_download)
+
+
+def pyErr(func: str) -> str:
+    """When a python exception is raised, this funciton formats the traceback
+    message.
+
+    Parameters
+    ----------
+    func : str
+        The function that raised the python error exception
+
+    Returns
+    -------
+    str
+        Formatted python error message
+    """
     try:
-
-        exc_type, exc_value, exc_traceback = sys.exc_info()
-        theMsg = "\t" + traceback.format_exception(exc_type, exc_value, exc_traceback)[1] + "\n\t" + traceback.format_exception(exc_type, exc_value, exc_traceback)[-1]
-
-        if theMsg.find("exit") > -1:
-            AddMsgAndPrint("\n\n")
-            pass
-        else:
-            AddMsgAndPrint(theMsg,2)
-
+        etype, exc, tb = sys.exc_info()
+        
+        tbinfo = traceback.format_tb(tb)[0]
+        tbinfo = '\t\n'.join(tbinfo.split(','))
+        msgs = (f"PYTHON ERRORS:\nIn function: {func}"
+                f"\nTraceback info:\n{tbinfo}\nError Info:\n\t{exc}")
+        return msgs
     except:
-        AddMsgAndPrint("Unhandled error in unHandledException method", 2)
-        pass
+        return "Error in pyErr method"
 
-## ================================================================================================================
-def AddMsgAndPrint(msg, severity=0):
-    # prints message to screen if run as a python script
-    # Adds tool message to the geoprocessor
-    #
-    #Split the message on \n first, so that if it's multiple lines, a GPMessage will be added for each line
+
+def arcpyErr(func: str) -> str:
+    """When an arcpy by exception is raised, this function formats the 
+    message returned by arcpy.
+
+    Parameters
+    ----------
+    func : str
+        The function that raised the arcpy error exception
+
+    Returns
+    -------
+    str
+        Formatted arcpy error message
+    """
     try:
-
-        print(msg)
-        #for string in msg.split('\n'):
-            #Add a geoprocessing message (in case this is run as a tool)
-        if severity == 0:
-            arcpy.AddMessage(msg)
-
-        elif severity == 1:
-            arcpy.AddWarning(msg)
-
-        elif severity == 2:
-            arcpy.AddError("\n" + msg)
-
+        etype, exc, tb = sys.exc_info()
+        line = tb.tb_lineno
+        msgs = (f"ArcPy ERRORS:\nIn function: {func}\non line: {line}"
+                f"\n\t{arcpy.GetMessages(2)}\n")
+        return msgs
     except:
-        pass
+        return "Error in arcpyErr method"
+    
+def concurrently(fn, max_concurrency, iterSets, constSets ):
+    """
+    Adapted from 
+    https://github.com/alexwlchan/concurrently/blob/main/concurrently.py
+    
 
-## ===================================================================================
-def getRegionalAreaSymbolList(ssurgoSSApath, userRegionChoice):
-# Returns the actual region number from the first parameter.
-# If the value has 1 integer than it should total 8 characters,
-# last character will be returned.  Otherwise, value has 2 integers
-# and last 2 will be returned.
-# [u'WI001, u'WI003']
+    Generates (input, output) tuples as the calls to ``fn`` complete.
 
+    See https://alexwlchan.net/2019/10/adventures-with-concurrent-futures/ 
+    for an explanation of how this function works.
+    
+    Parameters
+    ----------
+    fn : function
+        The function that it to be run in parallel.
+        
+    max_concurrency : int
+        Maximum number of processes, parameter for itertools islice function.
+        
+    iterSets : list
+        List of dictionaries that will be iterated through. The keys of the 
+        dictionary must be the same for each dictionary and align with keywords 
+        of the function.
+        
+    constSets : dict
+        Dictionary of parameters that constant for each iteration of the 
+        function ``fn``. Dictionary keys must align with function keywords.
+
+    Yields
+    ------
+    A tuple with the original input parameters and the results from the called
+    function ``fn``.
+    """
     try:
-        areaSymbolList = []
+        # Make sure we get a consistent iterator throughout, rather than
+        # getting the first element repeatedly.
+        # count = len(iterSets)
+        fn_inputs = iter(iterSets)
 
-        if userRegionChoice == 'CONUS':
-            whereClause = "CONUS = 'CONUS'"
+        with cf.ThreadPoolExecutor() as executor:
+            # initialize first set of processes
+            futures = {
+                executor.submit(fn, **params, **constSets): params
+                for params in it.islice(fn_inputs, max_concurrency)
+            }
+            # Wait for a future to complete, returns sets of complete and 
+            # incomplete futures
+            while futures:
+                done, _ = cf.wait(
+                    futures, return_when = cf.FIRST_COMPLETED
+                )
 
-        else:
-            whereClause = "\"Region_Download\" = '" + userRegionChoice + "'"
-        fields = ('AREASYMBOL')
+                for fut in done:
+                    # once process is done clear it out, yield results 
+                    # and params
+                    original_input = futures.pop(fut)
+                    output = fut.result()
+                    del fut
+                    yield original_input, output
 
-        with arcpy.da.SearchCursor(ssurgoSSApath, fields, whereClause) as cursor:
-            for row in cursor:
-                areaSymbolList.append(row[0])
-
-        del whereClause, fields
-        return areaSymbolList
-
+                # Sends another set of processes equivalent in size to those 
+                # just completed to executor to keep it at max_concurrency in 
+                # the pool at a time, to keep memory consumption down.
+                futures.update({
+                    executor.submit(fn, **params, **constSets): params
+                    for params in it.islice(fn_inputs, len(done))
+                })
+    except GeneratorExit:
+        raise
+        # arcpy.AddError("Need to do some clean up.")
+        # yield 2, 'yup'
+    except arcpy.ExecuteError:
+        func = sys._getframe(  ).f_code.co_name
+        msgs = arcpyErr(func)
+        yield [2, msgs]
     except:
-        errorMsg()
-        return ""
+        func = sys._getframe(  ).f_code.co_name
+        msgs = pyErr(func)
+        yield [2, msgs]
 
-## ===================================================================================
-def validateSSAs(surveyList, wssLibrary):
-# checks for missing SSURGO datasets in the wssLibrary folder.  If any SSURGO dataset is
-# missing return "".  All ssurgo datasets must be present in order to (re)construct the
-# regional Transactional database.  Also checks for duplicate ssurgo datasets in the
-# wssLibrary.  Return "" if duplicates are found.  Cannot have duplicates b/c this will
-# cause topology overlap and the duplicate datasets may be of different versions.
-# Returns a dictionary containing areasymbol & ssurgo dataset path
-#
-# {'ID001': 'C:\\Temp\\junk\\soils_id001', 'ID002': 'C:\\Temp\\junk\\wss_SSA_ID002_soildb_ID_2003_[2012-08-13]'
 
+def getDownloadString(ssa_l: list[str]) -> list[str]:
+    """Generates a string with the soil survey Areasymbol and date of most 
+    recent available from WSS. This string is needed to create url to 
+    download the zipped SSURGO file. This function sends a query to SDA and
+    requires and internest connection.
+
+    Parameters
+    ----------
+    ssa_l : list[str]
+        List of areasymbols
+
+    Returns
+    -------
+    list[str]
+        formatted strings with the Areasymbol, Date it was staged, survey area
+        name. Returns and empty list if it fails
+    """
     try:
-        import collections
+        tail = " ORDER BY AREASYMBOL"
+        trunk = ("SELECT AREASYMBOL, AREANAME, CONVERT(varchar(10), "
+                "[SAVEREST], 126) AS SAVEREST FROM SASTATUSMAP WHERE "
+                f"AREASYMBOL LIKE '{ssa_l[0]}'")
+        for ssa in ssa_l[1:]:
+            trunk += f" OR AREASYMBOL LIKE '{ssa}'"
+        sQuery = trunk + tail
 
-        ssurgoDatasetDict = dict()  # [AreaSymbol] = C:\Temp\junk\soil_ca688
-        wssLibraryList = []  # ['WI025','WI027']
+        url = r'https://SDMDataAccess.sc.egov.usda.gov/Tabular/post.rest'
+        # Create request using JSON, return data as JSON
+        dRequest = dict()
+        dRequest["format"] = "JSON"
+        dRequest["query"] = sQuery
+        jData = json.dumps(dRequest)
 
-        # get a list of all files in wssLibrary folder
-        for file in os.listdir(wssLibrary):
+        # Send request to SDA Tabular service using urllib2 library
+        jData = jData.encode('ascii')
+        response = urlopen(url, jData)
+        jsonString = response.read()
 
-            # Full path to individual file in wssLibrary folder
-            filePath = os.path.join(wssLibrary,file)
+        # Convert the returned JSON string into a Python dictionary.
+        data = json.loads(jsonString)
+        del jsonString, jData, response
 
-            # extract areasymbol name if file is a directory and a ssurgo dataset
-            if os.path.isdir(filePath):
-
-                # folder is named in WSS 3.0 format i.e. 'wss_SSA_WI063_soildb_WI_2003_[2012-06-27]'
-                if file.find("wss_SSA_") > -1:
-                    SSA = file[file.find("SSA_") + 4:file.find("soildb")-1].upper()
-                    wssLibraryList.append(SSA)
-
-                    if SSA in surveyList:
-                        ssurgoDatasetDict[SSA] = filePath
-                    del SSA
-
-                # folder is named according to traditional SDM format i.e. 'soil_wa001'
-                elif file.find("soil_") > -1:
-                    SSA = file[-5:].upper()
-                    wssLibraryList.append(SSA)
-
-                    if SSA in surveyList:
-                        ssurgoDatasetDict[SSA] = filePath
-                    del SSA
-
-                # folder is named in plural format instead of singular.  Accident!!!
-                elif file.find("soils_") > -1:
-                    SSA = file[-5:].upper()
-                    wssLibraryList.append(SSA)
-
-                    if SSA in surveyList:
-                        ssurgoDatasetDict[SSA] = filePath
-                    del SSA
-
-                elif len(file) == 5:
-                    SSA = file
-                    wssLibraryList.append(SSA)
-
-                    if SSA in surveyList:
-                        ssurgoDatasetDict[SSA] = filePath
-                    del SSA
-
-                # Not a SSURGO dataset; some other folder
+        # Find data section (key='Table')
+        valList = []
+        if "Table" in data:
+            # Data as a list of lists. All values come back as string.
+            dataList = data["Table"]
+            # Iterate through dataList, reformat to create the menu choicelist
+            for rec in dataList:
+                areasym, areaname, date = rec
+                if not date is None:
+                    date = date.split(" ")[0]
                 else:
-                    pass
-
-        # ------------------------------------------------------------------------ No Datasets in Library
-        if len(wssLibraryList) < 1:
-            AddMsgAndPrint("\n\tNo SSURGO datasets were found in " + os.path.dirname(wssLibrary) + " directory",2)
-            return ""
-
-        # ------------------------------------------------------------------------ Missing SSURGO Datasets
-        missingSSAList = []
-
-        # check for missing SSURGO datasets in wssLibrary.  Print missing datasets and return False.
-        for survey in surveyList:
-            if not survey in wssLibraryList:
-                missingSSAList.append(survey)
-
-        if len(missingSSAList) > 0:
-            AddMsgAndPrint("\n" + "The following Regional SSURGO datasets are missing from your local datasets",2)
-            for survey in missingSSAList:
-                AddMsgAndPrint("\t" + survey,2)
-                ssurgoDatasetDict.pop(survey, None)
-
-        # ---------------------------------------------------------------------- Duplicate SSURGO Datasets
-        # check for duplicate SSURGO SSAs in wssLibrary.  Print duplicates.  Return False only if the duplicates affects those surveys in the regional list.
-        # Cannot have duplicates b/c of different versions and overlap
-##        if len([x for x, y in collections.Counter(wssLibraryList).items() if y > 1]):
-##
-##            duplicateSSAs = []
-##
-##            for survey in [x for x, y in collections.Counter(wssLibraryList).items() if y > 1]:
-##                if survey in ssurgoDatasetDict:
-##                    duplicateSSAs.append(survey)
-##
-##            if len(duplicateSSAs) >  0:
-##                AddMsgAndPrint("\n\tThe following are duplicate SSURGO datasets found in " + os.path.basename(wssLibrary) + " directory:",2)
-##                for survey in duplicateSSAs:
-##                    AddMsgAndPrint("\t\t" + survey,2)
-##                    ssurgoDatasetDict.pop(survey, None)
-
-        # -------------------------------------------------------------------- Make sure Datum is either NAD83 or WGS84 and soils layer is not missing
-##        wrongDatum = []
-##        missingSoilLayer = []
-##
-##        for survey in ssurgoDatasetDict:
-##            soilShpPath = os.path.join(os.path.join(ssurgoDatasetDict[survey],"spatial"),"soilmu_a_" + survey.lower() + ".shp")
-##
-##            if arcpy.Exists(soilShpPath):
-##                if not compareDatum(soilShpPath):
-##                    wrongDatum.append(survey)
-##            else:
-##                missingSoilLayer.append(survey)
-##
-##        if len(wrongDatum) > 0:
-##            AddMsgAndPrint("\n\tThe following local SSURGO datasets have a Datum other than WGS84 or NAD83:",2)
-##            for survey in wrongDatum:
-##                AddMsgAndPrint("\t\t" + survey,2)
-##                ssurgoDatasetDict.pop(survey, None)
-##
-##        if len(missingSoilLayer) > 0:
-##            AddMsgAndPrint("\n\tThe following local SSURGO datasets are missing their soils shapefile:",2)
-##            for survey in missingSoilLayer:
-##                AddMsgAndPrint("\t\t" + survey,2)
-##                ssurgoDatasetDict.pop(survey, None)
-
-        # --------------------------------------------------------------------  At this point everything checks out; Return Dictionary!
-##        del wssLibraryList, missingSSAList, wrongDatum, missingSoilLayer
-        return ssurgoDatasetDict
-
+                    date = "None"
+                valList.append(f"{areasym},  {date},  {areaname}")
+        return valList
     except:
-        AddMsgAndPrint("\nUnhandled exception (validateSSAs)", 2)
-        errorMsg()
-        return ""
+        func = sys._getframe().f_code.co_name
+        arcpy.AddError(pyErr(func))
+        return []
 
-## ================================================================================================================
-def createFGDB(regionChoice,outputFolder):
-    # This function will Create the RTSD File Geodatabase by importing an XML workspace schema.
-    # Depending on what region is being created is what .xml file will be used.
-    # Schema includes 2 feature datasets: FD_RTSD & Project Record. 6 feature classes will be created
-    # within FD_RTSD along with a topology.  1 feature class will be created within the ProjectRecord
-    # FD.  Return new name of RTSD otherwise return empty string.
+
+def getSSARegionList(ssurgo_p: str, region_opt: str) -> list[str]:
+    """Creates a dictionary of Soil Survey Areas by specified Region.
+    
+    This function pulls a LIMs report to determine the current Regional
+    ownership  per NASIS NASIS Site Name of official legends. It also considers 
+    island area subdivisions of these Regions that have special projection
+    considerations.
+
+    Parameters
+    ----------
+    ssurgo_p : str
+        Path of the directory with downloaded SSURGO datasets.
+    region_opt : str
+        The Region, a subdivision of the Soil and Plant Science Division 
+        soil operations, for which to build an RTSD gdb for.
+
+    Returns
+    -------
+    list[str]
+        list the soil survey area symbols to be included in the RTSD gdb.
+        Returns and empty list if it failed.
+    """
+    try:
+        hi = ('HI',)
+        pac = ('GU', 'FM', 'MH', 'MP', 'PW')
+        sam = ('AS',)
+        prv = ('PR', 'VI')
+
+        if ':' in region_opt:
+            region, region_sub = region_opt.split(':')
+        else:
+            region = region_opt
+            region_sub = None
+        # New regional: legacy region it was collasced to
+        region_d = {
+            'Alaska': 'MLRA13_Wasilla', 'Northeast': 'MLRA12_Amherst',
+            'Northwest': 'MLRA04_Bozeman', 'North Central': 'MLRA10_StPaul',
+            'Southeast': 'MLRA03_Raleigh', 'Southwest': 'MLRA02_Davis',
+            'South Central': 'MLRA09_Temple'
+            }
+        # Lims report that provides official legend ownership
+        url = ('https://nasis.sc.egov.usda.gov/NasisReportsWebSite/'
+        'limsreport.aspx?report_name=WEB-Official%20Non-MLRA%20SSA')
+        html = requests.get(url).content
+        # Read table into pandas dataframe
+        df = pd.read_html(html)[0]
+        # NASIS Sites
+        region_s = set(df['NASIS Site Name'])
+        # Get current Region key
+        region_n = region_s.intersection({region, region_d[region]}).pop()
+        ssa_l = list(df['Area Symbol'][df['NASIS Site Name'] == region_n])
+        # exclude 'MXNL001'
+        if 'MXNL001' in ssa_l:
+            ssa_l.remove('MXNL001')
+        # Remove Islands sets from Southeast and Southwest or vice a versa
+        # or Remove Islands and AK from CONUS
+        if region_sub == ' HI':
+            ssa_s = {s for s in ssa_l if s[0:2] in hi}
+        elif region_sub == ' PacBasin':
+            ssa_s = {s for s in ssa_l if s[0:2] in pac}
+        elif region_sub == ' AmSamoa':
+            ssa_s = {s for s in ssa_l if s[0:2] in sam}
+        elif region == 'Southwest':
+            ssa_s = {s for s in ssa_l if s[0:2] not in hi + pac + sam}
+        elif region_sub == ' PRUSVI':
+            ssa_s = {s for s in ssa_l if s[0:2] in prv}
+        elif region == 'Southeast':
+            ssa_s = {s for s in ssa_l if s[0:2] not in prv}
+        elif region == 'CONUS':
+            ssa_s = {s for s in ssa_l if s[0:2] not in hi + pac + sam + prv}
+        elif region not in region_d:
+            arcpy.AddError(
+                f"{region_opt} does not seem to be a valid region choice"
+                )
+            return []
+        # otherwise `ssa_l` is the same
+        else:
+            ssa_s = set(ssa_l)
+
+        # Verify that all surveys have valid download in `ssurgo_p` directory
+        ssa_dir = {d.name.removeprefix('soil_').upper()
+                for d in os.scandir(ssurgo_p)
+                if (d.is_dir()
+                    and re.match(
+                        r"[a-zA-Z]{2}[0-9]{3}",
+                        d.name.removeprefix('soil_')
+                        )
+                    and os.path.exists(f"{d.path}/tabular")
+                    and os.path.exists(f"{d.path}/spatial")
+                    )}
+        # keys = set(ssa_d.keys())
+        not_downloaded = ssa_s - ssa_dir
+        if not_downloaded:
+            arcpy.AddWarning(
+                f"Not all soil surveys for {region_opt} are "
+                f"found in {ssurgo_p}.\nWill now download: {not_downloaded}"
+            )
+            ssa_info = getDownloadString(list(not_downloaded))
+            complete = query_download.main([
+                 ssurgo_p, ssa_info, False, True
+            ])
+            if not complete:
+                arcpy.AddError('Not all surveys could be downloaded.')
+                return []
+
+        return list(ssa_s)
+    
+    except arcpy.ExecuteError:
+        func = sys._getframe().f_code.co_name
+        arcpy.AddError(arcpyErr(func))
+        return []
+    except:
+        func = sys._getframe().f_code.co_name
+        arcpy.AddError(pyErr(func))
+        return []
+
+
+def createFGDB(region_opt: str, output_p: str) -> str:
+    """Create the RTSD File Geodatabase for Regional GIS Specialist
+
+    Creates the RTSD File Geodatabase by importing an XML workspace schema 
+    specific to the Region or sub-region
+    Schema includes 2 feature datasets: FD_RTSD & Project Record. 
+    Six feature classes are created within FD_RTSD the Feature Dataset.
+    One feature class within the ProjectRecord Feature Dataset.
+
+    Parameters
+    ----------
+    region_opt : str
+        The Region, a subdivision of the Soil and Plant Science Division 
+        soil operations, for which to build an RTSD gdb for.
+    output_p : str
+        The directory the new FGDB will be created in
+
+    Returns
+    -------
+    str
+        Name of the newly created FGDB, otherwise an empty string if it failed.
+    """
 
     try:
-
         # New fiscal year if month October, November and December
         month = int(datetime.now().strftime("%m"))
         if month > 9 and month < 13:
-            FY = "FY" + str(int(datetime.now().strftime("%y")) +1)
+            FY = f"FY{int(datetime.now().strftime('%y')) + 1}"
         else:
-            FY = "FY" + str(datetime.now().strftime("%y"))
+            FY = f"FY{datetime.now().strftime('%y')}"
+        # {datetime.strftime(datetime.now(),'%Y%m%d%H%M%S')}
 
+        newName = f"RTSD_{region_opt.replace(':', '_')}_{FY}.gdb"
+        # Space ' ' in region_opt was removed in main
         # Alaska =  NAD83 / Alaska Albers (EPSG 3338)
-        if regionChoice == "Region 1 - AK":
-            xmlFile = os.path.dirname(sys.argv[0]) + os.sep + "RTSD_XMLWorkspace_Alaska.xml"
-            newName = "RTSD_Region_1_Alaska_" + FY
-
+        if region_opt == 'Alaska':
+            xmlFile = (os.path.dirname(sys.argv[0])
+                       + "/RTSD_XMLWorkspace_Alaska.xml")
         # Hawaii - Hawaii_Albers_Equal_Area_Conic WGS84
-        elif regionChoice == "Region 2 - HI":
-            xmlFile = os.path.dirname(sys.argv[0])+ os.sep + "RTSD_XMLWorkspace_Hawaii.xml"
-            newName = "RTSD_Region_2_Hawaii_" + FY
-
+        elif region_opt == 'Southwest:HI':
+            xmlFile = (os.path.dirname(sys.argv[0])
+                       + "/RTSD_XMLWorkspace_Hawaii.xml")
         # PBSamoa - Hawaii_Albers_Equal_Area_Conic WGS84
-        elif regionChoice == "Region 2 - PBSamoa":
-            xmlFile = os.path.dirname(sys.argv[0]) + os.sep + "RTSD_XMLWorkspace_Hawaii.xml"
-            newName = "RTSD_Region_2_PBSamoa_" + FY
-
-        # Pacific Basin - Western Pacific Albers Equal Area Conic WGS84  Only PB630
-        elif regionChoice == "Region 2 - PacBasin":
-            xmlFile = os.path.dirname(sys.argv[0]) + os.sep + "RTSD_XMLWorkspace_PacBasin.xml"
-            newName ="RTSD_Region_2_PacBasin_" + FY
-
-        # Puerto Rico US Virgin Islands - NAD83 / Puerto Rico & Virgin Is. EPSG 32161
-        elif regionChoice == "Region 3 - PRUSVI":
-            xmlFile = os.path.dirname(sys.argv[0]) + os.sep + "RTSD_XMLWorkspace_PRUSVI.xml"
-            newName ="RTSD_Region_3_PRUSVI_" + FY
-
+        elif region_opt == "Southwest:AmSamoa":
+            xmlFile = (os.path.dirname(sys.argv[0])
+                       + "/RTSD_XMLWorkspace_Hawaii.xml")
+        # Pacific Basin - Western Pacific Albers Equal Area Conic WGS84
+        # Only PB630
+        elif region_opt == "Southwest:PacBasin":
+            xmlFile = (os.path.dirname(sys.argv[0])
+                       + "/RTSD_XMLWorkspace_PacBasin.xml")
+        # Puerto Rico US Virgin Islands - NAD83
+        # Puerto Rico & Virgin Is. EPSG 32161
+        elif region_opt == "Southeast:PRUSVI":
+            xmlFile = (os.path.dirname(sys.argv[0])
+                       + "/RTSD_XMLWorkspace_PRUSVI.xml")
         # CONUS - NAD83 / CONUS Albers (EPSG 5070)
         else:
-            xmlFile = os.path.dirname(sys.argv[0]) + os.sep + "RTSD_XMLWorkspace_CONUS.xml"
-
-            if regionChoice == 'CONUS':
-                newName = 'RTSD_CONUS' + "_" + FY
-            else:
-                newName = "RTSD_Region_" + str(regionChoice[regionChoice.find(" ")+1:]) + "_" + FY
+            xmlFile = (os.path.dirname(sys.argv[0])
+                       + "/RTSD_XMLWorkspace_CONUS.xml")
 
         # Return false if xml file is not found and delete targetGDB
-        if not arcpy.Exists(xmlFile):
-            AddMsgAndPrint(os.path.basename(xmlFile) + " was not found!",2)
-            arcpy.Delete_management(targetGDB)
+        if not os.path.exists(xmlFile):
+            arcpy.AddError(os.path.basename(xmlFile) + " was not found")
             return False
 
         # Create new FGDB with RTSD name
-        targetGDB = os.path.join(outputFolder, newName + '.gdb')
-
+        fgdb_p = os.path.join(output_p, newName)
         # if Transactional Spatial Database exists delete it
-        if arcpy.Exists(targetGDB):
+        if arcpy.Exists(fgdb_p):
+            arcpy.AddMessage(f"{newName} already exists, deleting")
+            arcpy.Delete_management(fgdb_p)
+        arcpy.CreateFileGDB_management(output_p, newName)
+        arcpy.ImportXMLWorkspaceDocument_management(
+            fgdb_p, xmlFile, "SCHEMA_ONLY", "DEFAULTS"
+            )
+        arcpy.AddMessage(f"Successfully Created RTSD File GDB: {fgdb_p}")
 
-            try:
-                AddMsgAndPrint("\n" + newName + ".gdb already exists, deleting",1)
-                arcpy.Delete_management(targetGDB)
-
-            except:
-                AddMsgAndPrint("\nFailed to Delte " + targetGDB,2)
-                return False
-
-        arcpy.CreateFileGDB_management(outputFolder, newName + '.gdb')
-        arcpy.ImportXMLWorkspaceDocument_management(targetGDB, xmlFile, "SCHEMA_ONLY", "DEFAULTS")
-        #arcpy.RefreshCatalog(outputFolder)
-
-        AddMsgAndPrint("\nSuccessfully Created RTSD File GDB: " + newName + ".gdb")
-
-        del targetGDB,FY,xmlFile
-        return newName + ".gdb"
+        return newName
 
     except arcpy.ExecuteError:
-        AddMsgAndPrint(arcpy.GetMessages(2),2)
-        return False
-
+        func = sys._getframe().f_code.co_name
+        arcpy.AddError(arcpyErr(func))
+        return ''
     except:
-        AddMsgAndPrint("Unhandled exception (createFGDB)", 2)
-        errorMsg()
-        return False
+        func = sys._getframe().f_code.co_name
+        arcpy.AddError(pyErr(func))
+        return ''
 
-## ================================================================================================================
-def parseDatumAndProjection(spatialReference):
-    # -------------  THIS FUNCTION IS OBSOLETE.  Transformation method i
-    # This functions extracts the Datum and Projection name from the user-defined
-    # spatial Reference.  If the Datum is NAD83 then a transformation method will
-    # set as an env transformation method other wise none will be applied.
-    # Datum and Projection Name are returned.
-    #
-    # Not sure if this even helps b/c the append tool does not honor env
-    # trans method.  Does this mean I have to project?  I tried 3 differnent apppend
-    # tests and they all generated the same results leading me that ArcGIS intelligently
-    # applies a transformation method but I can't figure out which one.  If I look at the
-    # results of the append tool and look at the env settings the trans method is set
-    # to NAD27 to NAD83.....WTF???
 
+def importFeatdesc(
+        ssa_l: list[str],
+        input_p: str,
+        gdb_p: str
+        ) -> str:
+    """Runs through each SSURGO download folder and imports the rows into the 
+    specified ``table`` . These tables have unique information from each 
+    survey area.
+
+    Parameters
+    ----------
+    ssa_l : list[str]
+        List of soil surveys
+    input_p : str
+        Path to the SSRUGO downloads
+    gdb_p : str
+        Path of the SSURGO geodatabase
+
+    Returns
+    -------
+    str
+        An empty string if successful, otherwise and error message.
+    """
     try:
+        txt = txt = 'soilsf_t_{ssa}'
+        cols = ['areasymbol', 'featsym', 'featname', 'featdesc']
+        iCur = arcpy.da.InsertCursor(f'{gdb_p}/featdesc', cols)
 
-        #---------- Gather Spatial Reference info ----------------------------
-        # Create the GCS WGS84 spatial reference and datum name using the factory code
-        WGS84_sr = arcpy.SpatialReference(4326)
-        WGS84_datum = WGS84_sr.datumName
-
-        # Parse Datum and GCS from user spatial reference
-        userDatum_Start = spatialReference.find("DATUM") + 7
-        userDatum_Stop = spatialReference.find(",", userDatum_Start) - 1
-        userDatum = spatialReference[userDatum_Start:userDatum_Stop]
-
-        userProjection_Start = spatialReference.find("[") + 2
-        userProjection_Stop = spatialReference.find(",",userProjection_Start) - 1
-        userProjectionName = spatialReference[userProjection_Start:userProjection_Stop]
-
-        del userDatum_Start, userDatum_Stop, userProjection_Start, userProjection_Stop
-
-        if userProjectionName != "" or userDatum != "":
-
-            AddMsgAndPrint("\nUser-Defined Spatial Reference System:",0)
-            AddMsgAndPrint("\tCoordinate System: " + userProjectionName,0)
-            AddMsgAndPrint("\tDatum: " + userDatum,0)
-
-            # user spatial reference is the same as WGS84
-            if WGS84_datum == userDatum:
-                AddMsgAndPrint("\n\tNo Datum Transformation method required", 1)
-
-                return userDatum,userProjectionName
-
-            # user datum is NAD83; apply trans method based on user input
-            elif userDatum == "D_North_American_1983":
-
-                if AOI == "CONUS":
-                    tm = "NAD_1983_To_WGS_1984_5"
-
-                elif AOI == "Alaska":
-                    tm = "NAD_1983_To_WGS_1984_5"
-
-                elif AOI == "Hawaii":
-                    tm = "NAD_1983_To_WGS_1984_3"
-
-                elif AOI == "Puerto Rico and U.S. Virgin Islands":
-                    tm = "NAD_1983_To_WGS_1984_5"
-
-                elif AOI == "Other":
-                    tm = "NAD_1983_To_WGS_1984_1"
-                    PrintMsg("\n\tWarning! No coordinate shift will being applied", 0)
-
-                else:
-                    AddMsgAndPrint("Invalid geographic region (" + AOI + ")",2)
-                    exit()
-
-                arcpy.env.outputCoordinateSystem = spatialReference
-                arcpy.env.geographicTransformations = tm
-                AddMsgAndPrint("\n\tUsing Datum Transformation Method '" + tm + "' for " + AOI, 1)
-
-                return userDatum,userProjectionName
-
-            # user datum was something other than NAD83 or WGS84
-            else:
-                AddMsgAndPrint("\n\tWarning! No Datum Transformation could be applied to " + userProjectionName + ".......EXITING!",2)
-                return "",""
-
-        # Could not parse CS name and datum
-        else:
-            AddMsgAndPrint("\n\tCould not extract Spatial Reference Properties........Halting import process",2)
-            return "",""
+        for ssa in ssa_l:
+            txt_p = f"'{input_p}/{ssa.upper()}/spatial/{txt}.txt'"
+            # in some instances // can create special charaters with eval
+            txt_p = txt_p.replace('\\', '/')
+            # convert latent f strings
+            txt_p = eval("f" + txt_p)
+            
+            if not os.path.exists(txt_p):
+                # Try SDM labeling
+                txt_p = f"'{input_p}/soil_{ssa.lower()}/spatial/{txt}.txt'"
+                # in some instances // can create special charaters with eval
+                txt_p = txt_p.replace('\\', '/')
+                # convert latent f strings
+                txt_p = eval("f" + txt_p)
+                if not os.path.exists(txt_p):
+                    return f"{txt_p} does not exist"
+            csvReader = csv.reader(
+                open(txt_p, 'r'), 
+                delimiter='|', 
+                quotechar='"'
+                )
+            for row in csvReader:
+                # replace empty sets with None; exclude feature key
+                row = list(None if not v else v for v in row)[:-1]
+                row.pop(1)
+                iCur.insertRow(row)
+        del iCur
+        return ''
 
     except arcpy.ExecuteError:
-        AddMsgAndPrint(arcpy.GetMessages(2),2)
-        return "",""
-
+        try:
+            del iCur
+        except:
+            pass
+        func = sys._getframe().f_code.co_name
+        return arcpy.AddError(arcpyErr(func))
     except:
-        AddMsgAndPrint("\nUnhandled exception (parseDatumAndProjection)", 2)
-        errorMsg()
-        return "",""
+        try:
+            del iCur
+        except:
+            pass
+        func = sys._getframe().f_code.co_name
+        return arcpy.AddError(pyErr(func))
 
-## ================================================================================================================
-def compareDatum(fc):
-    # Return True if fc datum is either WGS84 or NAD83
 
+def createTopology(fd_p: str) -> bool:
+    """Creates a topolgy with the RTSD_FD Feature Dataset
+
+    All official soil spatial features have topological considerations. This 
+    tool properly sets those rules up.
+
+    Parameters
+    ----------
+    fd_p : str
+        Path to the RTSD_FD feature dataset where MUPOLYOGN, etc. are found.
+
+    Returns
+    -------
+    bool
+        Returns True if successful, otherwise False.
+    """
+    
     try:
-        # Create Spatial Reference of the input fc. It must first be converted in to string in ArcGIS10
-        # otherwise .find will not work.
-        fcSpatialRef = str(arcpy.CreateSpatialReference_management("#",fc,"#","#","#","#"))
-        FCdatum_start = fcSpatialRef.find("DATUM") + 7
-        FCdatum_stop = fcSpatialRef.find(",", FCdatum_start) - 1
-        fc_datum = fcSpatialRef[FCdatum_start:FCdatum_stop]
-
-        # Create the GCS WGS84 spatial reference and datum name using the factory code
-        WGS84_sr = arcpy.SpatialReference(4326)
-        WGS84_datum = WGS84_sr.datumName
-
-        NAD83_datum = "D_North_American_1983"
-
-        # Input datum is either WGS84 or NAD83; return true
-        if fc_datum == WGS84_datum or fc_datum == NAD83_datum:
-            del fcSpatialRef, FCdatum_start, FCdatum_stop,fc_datum,WGS84_sr,WGS84_datum,NAD83_datum
-            return True
-
-        # Input Datum is some other Datum; return false
-        else:
-            del fcSpatialRef, FCdatum_start, FCdatum_stop,fc_datum,WGS84_sr,WGS84_datum,NAD83_datum
-            return False
-
-    except arcpy.ExecuteError:
-        AddMsgAndPrint(arcpy.GetMessages(2),2)
-        return False
-
-    except:
-        errorMsg()
-        return False
-
-## ===============================================================================================================
-def splitThousands(someNumber):
-# will determine where to put a thousands seperator if one is needed.
-# Input is an integer.  Integer with or without thousands seperator is returned.
-
-    try:
-        return re.sub(r'(\d{3})(?=\d)', r'\1,', str(someNumber)[::-1])[::-1]
-
-    except:
-        errorMsg()
-        return someNumber
-
-## ===============================================================================================================
-def createTopology(RTSD_FD):
-
-    try:
-
-        #env.workspace = RTSD_FD
-        AddMsgAndPrint("\nCreating Topology and Rules",0)
+        env.workspace = fd_p
+        topo_n = "FD_RTSD_Topology"
+        topo_p = f"{fd_p}/{topo_n}"
         arcpy.SetProgressor("step", "Creating Topology", 0, 3, 1)
 
         # Create New topology
         arcpy.SetProgressorLabel("Creating Topology")
-        arcpy.CreateTopology_management(RTSD_FD, "FD_RTSD_Topology", 0.2)
-        newTopology = os.path.join(RTSD_FD,"FD_RTSD_Topology")
-        AddMsgAndPrint("\tCreated Topology: FD_RTSD_Topology at 0.2m cluster tolerance",0)
-        arcpy.SetProgressorPosition()
+        arcpy.CreateTopology_management(fd_p, topo_n, 0.2)
 
+        arcpy.AddMessage(
+            "\nCreated Topology: FD_RTSD_Topology at 0.2m cluster tolerance")
+        arcpy.SetProgressorPosition()
+        
         # Add feature classes to topology
-        arcpy.SetProgressorLabel("Creating Topology: Adding Feature Classes to Topology")
-        arcpy.AddFeatureClassToTopology_management(newTopology, os.path.join(RTSD_FD, "MUPOLYGON"), 1, 1)
-        arcpy.AddFeatureClassToTopology_management(newTopology, os.path.join(RTSD_FD,"MUPOINT"), 1, 1)
-        arcpy.AddFeatureClassToTopology_management(newTopology, os.path.join(RTSD_FD,"MULINE"), 1, 1)
-        arcpy.AddFeatureClassToTopology_management(newTopology, os.path.join(RTSD_FD,"FEATPOINT"), 1, 1)
-        arcpy.AddFeatureClassToTopology_management(newTopology, os.path.join(RTSD_FD,"FEATLINE"), 1, 1)
-        AddMsgAndPrint("\tAdded 5 Feature Classes to participate in the Topology",0)
+        arcpy.SetProgressorLabel(
+            "Creating Topology: Adding Feature Classes to Topology")
+        arcpy.AddFeatureClassToTopology_management(
+            topo_n, f"{fd_p}/MUPOLYGON", 1, 1)
+        arcpy.AddFeatureClassToTopology_management(
+            topo_n, f"{fd_p}/MUPOINT", 1, 1)
+        arcpy.AddFeatureClassToTopology_management(
+            topo_n, f"{fd_p}/MULINE", 1, 1)
+        arcpy.AddFeatureClassToTopology_management(
+            topo_n, f"{fd_p}/FEATPOINT", 1, 1)
+        arcpy.AddFeatureClassToTopology_management(
+            topo_n, f"{fd_p}/FEATLINE", 1, 1)
         arcpy.SetProgressorPosition()
 
         # Add Topology Rules
         arcpy.SetProgressorLabel("Creating Topology: Adding Rules to Topology")
-        arcpy.AddRuleToTopology_management(newTopology, "Must Not Overlap (Area)", "MUPOLYGON")
-        arcpy.AddRuleToTopology_management(newTopology, "Must Not Have Gaps (Area)", "MUPOLYGON")
-        arcpy.AddRuleToTopology_management(newTopology, "Must Not Overlap (Line)", "FEATLINE")
-        arcpy.AddRuleToTopology_management(newTopology, "Must Not Intersect (Line)", "FEATLINE")
-        arcpy.AddRuleToTopology_management(newTopology, "Must Not Self-Overlap (Line)", "FEATLINE")
-        arcpy.AddRuleToTopology_management(newTopology, "Must Not Have Pseudo-Nodes (Line)", "FEATLINE")
-        arcpy.AddRuleToTopology_management(newTopology, "Must Not Self-Intersect (Line)", "FEATLINE")
-        arcpy.AddRuleToTopology_management(newTopology, "Must Be Single Part (Line)", "FEATLINE")
-        arcpy.AddRuleToTopology_management(newTopology, "Must Be Disjoint (Point)", "FEATPOINT")
-        arcpy.AddRuleToTopology_management(newTopology, "Must Be Disjoint (Point)", "MUPOINT")
-        arcpy.AddRuleToTopology_management(newTopology, "Must Be Properly Inside (Point-Area)","FEATPOINT","","MUPOLYGON","")
-        arcpy.AddRuleToTopology_management(newTopology, "Must Not Overlap (Line)", "MULINE")
-        arcpy.AddRuleToTopology_management(newTopology, "Must Not Intersect (Line)", "MULINE")
-        arcpy.AddRuleToTopology_management(newTopology, "Must Not Self-Overlap (Line)", "MULINE")
-        arcpy.AddRuleToTopology_management(newTopology, "Must Not Have Pseudo-Nodes (Line)", "MULINE")
-        arcpy.AddRuleToTopology_management(newTopology, "Must Not Self-Intersect (Line)", "MULINE")
-        arcpy.AddRuleToTopology_management(newTopology, "Must Be Single Part (Line)", "MULINE")
+        arcpy.AddRuleToTopology_management(
+            topo_p, "Must Not Overlap (Area)", f"{fd_p}/MUPOLYGON")
+        arcpy.AddRuleToTopology_management(
+            topo_p, "Must Not Have Gaps (Area)", f"{fd_p}/MUPOLYGON")
+        arcpy.AddRuleToTopology_management(
+            topo_p, "Must Not Overlap (Line)", f"{fd_p}/FEATLINE")
+        arcpy.AddRuleToTopology_management(
+            topo_p, "Must Not Intersect (Line)", f"{fd_p}/FEATLINE")
+        arcpy.AddRuleToTopology_management(
+            topo_p, "Must Not Self-Overlap (Line)", f"{fd_p}/FEATLINE")
+        arcpy.AddRuleToTopology_management(
+            topo_p, "Must Not Have Pseudo-Nodes (Line)", f"{fd_p}/FEATLINE")
+        arcpy.AddRuleToTopology_management(
+            topo_p, "Must Not Self-Intersect (Line)", f"{fd_p}/FEATLINE")
+        arcpy.AddRuleToTopology_management(
+            topo_p, "Must Be Single Part (Line)", f"{fd_p}/FEATLINE")
+        arcpy.AddRuleToTopology_management(
+            topo_p, "Must Be Disjoint (Point)", f"{fd_p}/FEATPOINT")
+        arcpy.AddRuleToTopology_management(
+            topo_p, "Must Be Disjoint (Point)", f"{fd_p}/MUPOINT")
+        arcpy.AddRuleToTopology_management(
+            topo_p, "Must Be Properly Inside (Point-Area)",
+            f"{fd_p}/FEATPOINT", "", f"{fd_p}/MUPOLYGON","")
+        arcpy.AddRuleToTopology_management(
+            topo_p, "Must Not Overlap (Line)", f"{fd_p}/MULINE")
+        arcpy.AddRuleToTopology_management(
+            topo_p, "Must Not Intersect (Line)", f"{fd_p}/MULINE")
+        arcpy.AddRuleToTopology_management(
+            topo_p, "Must Not Self-Overlap (Line)", f"{fd_p}/MULINE")
+        arcpy.AddRuleToTopology_management(
+            topo_p, "Must Not Have Pseudo-Nodes (Line)", f"{fd_p}/MULINE")
+        arcpy.AddRuleToTopology_management(
+            topo_p, "Must Not Self-Intersect (Line)", f"{fd_p}/MULINE")
+        arcpy.AddRuleToTopology_management(
+            topo_p, "Must Be Single Part (Line)", f"{fd_p}/MULINE")
 
-        AddMsgAndPrint("\tAdded 17 rules to the Topology",0)
+        arcpy.AddMessage("\tAdded 17 rules to the Topology")
         arcpy.SetProgressorPosition()
         arcpy.ResetProgressor()
 
-        #arcpy.RefreshCatalog(RTSD_FD)
-        del newTopology
         return True
 
+    except arcpy.ExecuteError:
+        func = sys._getframe().f_code.co_name
+        arcpy.AddError(arcpyErr(func))
+        return False
     except:
-        errorMsg()
+        func = sys._getframe().f_code.co_name
+        arcpy.AddError(pyErr(func))
         return False
 
-## ===============================================================================================================
-def ImportFeatureFiles(ssurgoDatasetDict):
-# This function will import the feature files into the featdesc table within
-# RTSD.  Spatial version and FEATKEY are not imported.  Warns user if feature
-# file is empty.  Return True if all worked well.
 
+def appendFeatures(fd_p: str, 
+                   feat: tuple[str], 
+                   input_f: str, 
+                   ssa_l: list[str],
+                   )-> dict[list[str]]:  
+    """Appends SSURGO spatial features 
+    
+    Appends from each SSURGO download to the respective SSURGO feature. Note 
+    that SAPOLYGON should be appeneded first to aid with spatial indexing by 
+    setting append order from NW extent of survey set. While this function 
+    could be run in parallel, the arcpy environmental setting for 
+    Geographic Transformations is not honored and could not be set within the 
+    indiviudal instances.
+
+    Parameters
+    ----------
+    gdb : str
+        The path of the new SSURGO geodatabase.
+    feat : tuple(str)
+        Contains two strings. The first string is the SSURGO feature name, the 
+        second string is the shapefile name.
+    input_f str
+        Folder with the unzipped SSURGO donwloads.
+    ssa_l : list[str]
+        List of soil survey areas to be appended.
+
+    Returns
+    -------
+    dict[list[str]]
+        If successful retrun dictionary with the key 'surveys' and value with 
+        the list of soil survey areas. When the input feature is 
+        SAPOLYGON the list is spatially sorted. If unsuccessful, it 
+        returns dictionary with the 'error' key with an error message.
+
+    """
     try:
-        AddMsgAndPrint("\n" + "Importing Feature Files",0)
-        arcpy.SetProgressor("step", "Importing Feature Files", 0, len(ssurgoDatasetDict), 1)
+        feat_gdb = feat[0]
+        feat_shp = feat[1]
+        env.geographicTransformations = 'WGS_1984_(ITRF00)_To_NAD_1983'
+        sf = ('PROJCS["NAD_1983_Contiguous_USA_Albers"'
+              ',GEOGCS["GCS_North_American_1983",DATUM["D_North_American_1983"'
+              ',SPHEROID["GRS_1980",6378137.0,298.257222101]],'
+              'PRIMEM["Greenwich",0.0],UNIT["Degree",0.0174532925199433]],'
+              'PROJECTION["Albers"],PARAMETER["False_Easting",0.0],'
+              'PARAMETER["False_Northing",0.0],'
+              'PARAMETER["Central_Meridian",-96.0],'
+              'PARAMETER["Standard_Parallel_1",29.5],'
+              'PARAMETER["Standard_Parallel_2",45.5],'
+              'PARAMETER["Latitude_Of_Origin",23.0],UNIT["Meter",1.0]]')
+        tran = 'WGS_1984_(ITRF00)_To_NAD_1983'
+        # if SAPOLYGON, set up temp file to append a spatially indexed version
+        if (feat_gdb != 'SAPOLYGON') or (len(ssa_l) == 1):
+            feat_p = f"{fd_p}/{feat_gdb}"
+        else:
+            feat_p = "memory/SAPOLYGON"
+        count = 0 # total count of features
+        # feat_d = {} # path, count; for log file
+        feat_l = []
+        for ssa in ssa_l:
+            shp = f"{input_f}/{ssa.upper()}/spatial/{feat_shp}_{ssa}.shp"
+            if not os.path.exists(shp):
+                # Try SDM labeling
+                shp = f"{input_f}/soil_{ssa.lower()}/spatial/{feat_shp}_{ssa}.shp"
+                if not os.path.exists(shp):
+                    arcpy.AddError()
+                    return {'error': f"{shp} does not exist."}
+            cnt = int(arcpy.GetCount_management(shp).getOutput(0))
+            count += cnt
+            if cnt > 0:
+                feat_l.append(shp)
 
-        featDescTable = os.path.join(FGDBpath,"featdesc")
-
-        # Put all the field names in a list; used to initiate insertCursor object
-        fieldList = arcpy.ListFields(featDescTable)
-        nameOfFields = []
-
-        for field in fieldList:
-
-            if field.type != "OID":
-                nameOfFields.append(field.name)
-
-        # Initiate Cursor to add rows
-        cursor = arcpy.da.InsertCursor(featDescTable, nameOfFields)
-
-        missingFiles = []
-        importError = []
-        importedCorrectly = 0
-        emptyFiles = 0
-
-        for SSA in ssurgoDatasetDict:
-            arcpy.SetProgressorLabel("Importing Feature File: " + SSA)
-
-            # Paths to individual SSURGO layers
-            specFeatDescFile = os.path.join(os.path.join(ssurgoDatasetDict[SSA],"spatial"),"soilsf_t_" + SSA.lower() + ".txt")
-
-            # check if feature file exists
-            if os.path.exists(specFeatDescFile):
-
-                # Continue if the feature file contains values. Not Empty file
-                if os.path.getsize(specFeatDescFile) > 0:
-
-                    # Number of records in the feature file
-                    textFileRecords = sum(1 for row in csv.reader(open(specFeatDescFile, 'r'), delimiter='|', quotechar='"'))
-                    F = csv.reader(open(specFeatDescFile, 'r'), delimiter='|', quotechar='"')
-
-                    i = 0 # row counter
-                    for rowInF in F:
-                        try:
-                            i+=1
-                            newRow = rowInF[0],rowInF[2],rowInF[3],rowInF[4]
-                            cursor.insertRow(newRow)
-                            del newRow
-
-                        except:
-                            AddMsgAndPrint("\tFailed to import line #" + str(i) + " for " + SSA + " feature file",2)
-                            continue
-
-                    #AddMsgAndPrint("\tSuccessfully Imported: " + str(textFileRecords) + " records",0)
-
-                    if i != textFileRecords:
-                        AddMsgAndPrint("\tIncorrect # of records inserted for " + SSA,2)
-                        AddMsgAndPrint("\t\tFeature file records: " + str(textFileRecords),2)
-                        AddMsgAndPrint("\t\tRecords Inserted: " + str(i),2)
-                        importError.append(SSA)
-
-                    else:
-                        importedCorrectly += 1
-
-                    del textFileRecords,F,i
-
-                # feature file is empty, print a warning
-                else:
-                    AddMsgAndPrint("\t" + SSA + " feature file is empty",1)
-                    emptyFiles += 1
-
+        if feat_l:
+            # arcpy.SetProgressorLabel(f"\tAppending features to {feat_gdb}")
+            if feat_p != "memory/SAPOLYGON":
+                with arcpy.EnvManager(
+                    outputCoordinateSystem=sf,
+                    geographicTransformations=tran
+                ):
+                    arcpy.Append_management(feat_l, feat_p, "NO_TEST")
+                cnt = int(arcpy.GetCount_management(feat_p).getOutput(0))
             else:
-                AddMsgAndPrint("\t" + SSA + " feature file is missing",2)
-                missingFiles.append(SSA)
+                # Make virtual copy of template SAPOLYOGN to preserve metadata
+                arcpy.CopyFeatures_management(f"{fd_p}/{feat_gdb}", feat_p)
+                with arcpy.EnvManager(
+                    outputCoordinateSystem=sf,
+                    geographicTransformations=tran
+                ):
+                    arcpy.Append_management(feat_l, feat_p, "NO_TEST")
+                feat_temp = feat_p
+                feat_p = f"{fd_p}/{feat_gdb}"
+                feat_desc = arcpy.Describe(feat_p)
+                shp_fld = feat_desc.shapeFieldName
+                # Spatially sort fron NW extent
+                arcpy.management.Sort(feat_temp, feat_p, shp_fld, "UR")
+                sCur = arcpy.da.SearchCursor(feat_p, "areasymbol", )
+                sort_l = tuple(ssa for ssa, in sCur)
+                del sCur
+                arcpy.Delete_management(feat_temp)
+                arcpy.Delete_management("memory")
+                return {'surveys': sort_l}
 
-            arcpy.SetProgressorPosition()
-            del specFeatDescFile
+            if cnt == count:
+                arcpy.management.AddSpatialIndex(feat_p)
+                arcpy.management.AddIndex(
+                    feat_p,
+                    "AREASYMBOL",
+                    "Indx_MupolyAreasymbol"
+                    )
+                # arcpy.AddMessage(f"\t{cnt} features were appended to "
+                #                  f"{feat_gdb}")
+            else:
+                msg = (f"\tOnly {cnt} of {count} features were "
+                               f"appended to {feat_gdb}")
+                return {'error': msg}
+        
+        elif (feat_gdb == 'SAPOLYGON') or (feat_gdb == 'MUPOLYGON'):
+            msg = f"\tThere were no features appended to {feat_gdb}"
+            return [msg]
+        else: # No MUPOINT, MULINE, or special features
+            # ---- LOG
+            pass
+        return {'surveys': ssa_l}
+            
+    except arcpy.ExecuteError:
+        func = sys._getframe().f_code.co_name
+        msg = arcpyErr(func)
+        return {'error': msg}
+    except:
+        func = sys._getframe().f_code.co_name
+        msg = pyErr(func)
+        return {'error': msg}
 
-        # Print any missing surveys
-        if len(missingFiles) > 0:
-            AddMsgAndPrint("\n\tThe following SSAs had missing feature files:",2)
-            for ssa in missingFiles:
-                AddMsgAndPrint( "\t\t" + ssa,2)
 
-        # Print any SSAs that had errors importing
-        if len(importError) > 0:
-            AddMsgAndPrint("\n\tThe following SSAs had errors importing - Feature files should be looked at:",2)
-            for ssa in importError:
-                AddMsgAndPrint( "\t\t" + ssa,2)
+def updateAliasNames(region: str, gdb_p: str) -> bool:
+    """Create and Region specific alieas for each spatial feature
 
-        if (emptyFiles + importedCorrectly) == len(ssurgoDatasetDict):
-            AddMsgAndPrint("\tAll " + str(len(ssurgoDatasetDict)) + " Feature Files Successfully Imported",0)
+    Parameters
+    ----------
+    region : str
+        Region otption selected by user
+    gdb_p : str
+        Path of the RTSD geodatabase
+
+    Returns
+    -------
+    bool
+        Returns True if successful, otherwise False
+    """
+    try:
+        region_d = {
+            'Alaska': 'AK', 'Northest': 'NE',
+            'Northwest': 'NW', 'North Central': 'NC',
+            'Southeast': 'SE', 'Southeast: PRUSVI': 'PV', 'Southwest': 'SW',
+            'Southwest: HI': 'HI', 'Southwest: AmSamoa':'AS',
+            'Southwest: PacBasin': 'PB', 'South Central': 'SC'
+            }
+        aliasUpdate = 0
+        if region == 'CONUS':
+            alias_n = "CONUS"
         else:
-            AddMsgAndPrint("\tOnly " + str(importedCorrectly) + " Feature Files were successfully imported",2)
+            alias_n = "RTSD " + region_d[region]
 
-        del featDescTable, fieldList, field, nameOfFields, cursor, missingFiles, importError, importedCorrectly, emptyFiles
-        arcpy.ResetProgressor()
+        arcpy.AlterAliasName(
+            f'{gdb_p}/FD_RTSD/FEATLINE', alias_n + " - Special Feature Lines")
+        arcpy.AlterAliasName(
+            f'{gdb_p}/FD_RTSD/FEATPOINT', alias_n + " - Special Feature Points")
+        arcpy.AlterAliasName(
+            f'{gdb_p}/FD_RTSD/MUPOLYGON', alias_n + " - Mapunit Polygon")
+        arcpy.AlterAliasName(
+            f'{gdb_p}/FD_RTSD/SAPOLYGON', alias_n + " - Survey Area Polygon")
+        arcpy.AlterAliasName(
+            f'{gdb_p}/FD_RTSD/MULINE', alias_n + " - Mapunit Line")
+        arcpy.AlterAliasName(
+            f'{gdb_p}/FD_RTSD/MUPOINT', alias_n + " - Mapunit Point")
+        arcpy.AlterAliasName(
+            f'{gdb_p}/ProjectRecord/Project_Record',
+            alias_n + " - Project Record")
+        
         return True
 
     except arcpy.ExecuteError:
-        AddMsgAndPrint(arcpy.GetMessages(2),2)
+        func = sys._getframe().f_code.co_name
+        arcpy.AddError(arcpyErr(func))
         return False
-
     except:
-        errorMsg()
+        func = sys._getframe().f_code.co_name
+        arcpy.AddError(pyErr(func))
         return False
 
-## ===============================================================================================================
-def updateAliasNames(regionChoice,fdPath):
-# Update the alias name of every feature class in the RTSD including the project record.
-# i.e. alias name for MUPOLYGON = Region 10 - Mapunit Polygon
 
-    try:
+def addAttributeIndex(table: str, fieldList: list[str], verbose=True) -> bool:
+    """Creates attribute indices for all feature classes and tables
 
-        aliasUpdate = 0
-        if regionChoice == 'CONUS':
-            aliasName = "CONUS"
+Attribute indexes can speed up attribute queries on feature classes and tables.
+This function adds an attribute indices for the fields passed to the table that
+is passed in.
+  1) Table - 
+  2) 
+This function will make sure an existing index is not associated with that field.
+Does not return anything.
 
-        else:
-            regionNumber = str([int(s) for s in regionChoice.split() if s.isdigit()][0])
-            aliasName = "RTSD R" + regionNumber
+    Parameters
+    ----------
+    table : _type_
+        Full path to an existing table or feature class
+    fieldList : _type_
+        List of fields that exist in table
+    verbose : bool, optional
+        Whether to print out all messages, by default True
 
-        if arcpy.Exists(os.path.join(fdPath,'FEATLINE')):
-            arcpy.AlterAliasName(os.path.join(fdPath,'FEATLINE'), aliasName + " - Special Feature Lines")  #FEATLINE
-            aliasUpdate += 1
-
-        if arcpy.Exists(os.path.join(fdPath,'FEATPOINT')):
-            arcpy.AlterAliasName(os.path.join(fdPath,'FEATPOINT'), aliasName + " - Special Feature Points")  #FEATPOINT
-            aliasUpdate += 1
-
-        if arcpy.Exists(os.path.join(fdPath,'MUPOLYGON')):
-            arcpy.AlterAliasName(os.path.join(fdPath,'MUPOLYGON'), aliasName + " - Mapunit Polygon")  #MUPOLYGON
-            aliasUpdate += 1
-
-        if arcpy.Exists(os.path.join(fdPath,'SAPOLYGON')):
-            arcpy.AlterAliasName(os.path.join(fdPath,'SAPOLYGON'), aliasName + " - Survey Area Polygon")  #SAPOLYGON
-            aliasUpdate += 1
-
-        if arcpy.Exists(os.path.join(fdPath,'MULINE')):
-            arcpy.AlterAliasName(os.path.join(fdPath,'MULINE'), aliasName + " - Mapunit Line")  #MULINE
-            aliasUpdate += 1
-
-        if arcpy.Exists(os.path.join(fdPath,'MUPOINT')):
-            arcpy.AlterAliasName(os.path.join(fdPath,'MUPOINT'), aliasName + " - Mapunit Point")  #MUPOINT
-            aliasUpdate += 1
-
-        if arcpy.Exists(os.path.join(FGDBpath + os.sep + 'ProjectRecord' + os.sep + 'Project_Record')):
-            arcpy.AlterAliasName(os.path.join(FGDBpath + os.sep + 'ProjectRecord' + os.sep + 'Project_Record'), aliasName + " - Project Record")  #Project_Record
-            aliasUpdate += 1
-
-        if aliasUpdate == 7:
-            return True
-        else:
-            return False
-
-    except arcpy.ExecuteError:
-        AddMsgAndPrint(arcpy.GetMessages(2),2)
-        return False
-
-    except:
-        errorMsg()
-        return False
-
-## ===============================================================================================================
-def addAttributeIndex(table,fieldList,verbose=True):
-# Attribute indexes can speed up attribute queries on feature classes and tables.
-# This function adds an attribute index(es) for the fields passed to the table that
-# is passed in. This function takes in 2 parameters:
-#   1) Table - full path to an existing table or feature class
-#   2) List of fields that exist in table
-# This function will make sure an existing index is not associated with that field.
-# Does not return anything.
+    Returns
+    -------
+    bool
+        Returns True if successful, otherwise False.
+    """
+# 
 
     try:
         # Make sure table exists. - Just in case
         if not arcpy.Exists(table):
-            AddMsgAndPrint("Attribute index cannot be created for: " + os.path.basename(table) + " TABLE DOES NOT EXIST",2)
+            arcpy.AddError(
+                "Attribute index cannot be created for: "
+                f"{os.path.basename(table)} TABLE DOES NOT EXIST")
             return False
 
         else:
-            if verbose: AddMsgAndPrint("Adding Indexes to Table: " + os.path.basename(table))
+            if verbose: 
+                arcpy.AddMessage(
+                    "Adding Indexes to Table: " + os.path.basename(table))
 
         # iterate through every field
         for fieldToIndex in fieldList:
@@ -719,18 +907,20 @@ def addAttributeIndex(table,fieldList,verbose=True):
             # Make sure field exists in table - Just in case
             if not len(arcpy.ListFields(table,"*" + fieldToIndex))>0:
                 if verbose:
-                    AddMsgAndPrint("\tAttribute index cannot be created for: " + fieldToIndex + ". FIELD DOES NOT EXIST",2)
+                    arcpy.AddError(
+                        "\tAttribute index cannot be created for: "
+                        f"{fieldToIndex}. FIELD DOES NOT EXIST")
                     continue
 
             # list of indexes (attribute and spatial) within the table that are
-            # associated with the field or a field that has the field name in it.
-            # Important to inspect all associated fields b/c they could be using
-            # a differently named index
+            # associated with the field or a field that has the field name in 
+            # it. Important to inspect all associated fields b/c they could be 
+            # using a differently named index
             existingIndexes = arcpy.ListIndexes(table,"*" + fieldToIndex)
             bFieldIndexExists = False
 
-            # check existing indexes to see if fieldToIndex is already associated
-            # with an index
+            # check existing indexes to see if fieldToIndex is already 
+            # associated with an index
             if len(existingIndexes) > 0:
 
                 # iterate through the existing indexes looking for a field match
@@ -738,17 +928,20 @@ def addAttributeIndex(table,fieldList,verbose=True):
                     associatedFlds = index.fields
 
                     # iterate through the fields associated with existing index.
-                    # Should only be 1 field since multiple fields are not allowed
-                    # in a single FGDB.
+                    # Should only be 1 field since multiple fields are not 
+                    # allowed in a single FGDB.
                     for fld in associatedFlds:
 
-                        # Field is already part of an existing index - Notify User
+                        # Field is already part of an existing index
                         if fld.name == fieldToIndex:
                             if verbose:
-                                AddMsgAndPrint("\tAttribute Index for " + fieldToIndex + " field already exists",1)
+                                arcpy.AddWarning(
+                                    f"\tAttribute Index for {fieldToIndex} "
+                                    "field already exists")
                                 bFieldIndexExists = True
 
-                    # Field is already part of an existing index - Proceed to next field
+                    # Field is already part of an existing index
+                    # Proceed to next field
                     if bFieldIndexExists:
                         break
 
@@ -757,436 +950,163 @@ def addAttributeIndex(table,fieldList,verbose=True):
                 newIndex = "IDX_" + fieldToIndex
 
                 # UNIQUE setting is not used in FGDBs - comment out
-                arcpy.AddIndex_management(table,fieldToIndex,newIndex,"#","ASCENDING")
+                arcpy.AddIndex_management(
+                    table,fieldToIndex,newIndex,"#","ASCENDING")
 
                 if verbose:
-                    AddMsgAndPrint("\tSuccessfully added attribute index for " + fieldToIndex)
+                    arcpy.AddMessage(
+                        "\tSuccessfully added attribute index for "
+                        f"{fieldToIndex}")
 
+    except arcpy.ExecuteError:
+        func = sys._getframe().f_code.co_name
+        arcpy.AddError(arcpyErr(func))
+        return False
     except:
-        errorMsg()
+        func = sys._getframe().f_code.co_name
+        arcpy.AddError(pyErr(func))
         return False
 
 
-## =========================================================== Main Body =========================================================================
-# Import modules
-import arcpy, sys, string, os, time, datetime, re, traceback, csv
-from arcpy import env
-from datetime import datetime
-
+# --- Main Body
 if __name__ == '__main__':
+    v = '2.2'
+    arcpy.AddMessage(f'Version: {v}')
+    env.parallelProcessingFactor = "85%"
+    env.overwriteOutput = True
+    env.geographicTransformations = 'WGS_1984_(ITRF00)_To_NAD_1983'
+    # --- Input Arguments
+    # Parameter 0: Regional selection
+    region_opt = arcpy.GetParameterAsText(0)
 
-    arcpy.env.parallelProcessingFactor = "75%"
-    arcpy.env.overwriteOutput = True
+    # Parameter 1: Input Directory where the new FGDB will be created.
+    output_p = arcpy.GetParameterAsText(1)
 
-    # ---------------------------------------------------------------------------------------Input Arguments
-    # Parameter # 1: (Required) Name of new file geodatabase to create
-    regionChoice = arcpy.GetParameterAsText(0)  # User selects what region to create MRSD
-    #regionChoice = "CONUS"
-
-    # Parameter # 2: (Required) Input Directory where the new FGDB will be created.
-    outputFolder = arcpy.GetParameterAsText(1)
-    #outputFolder = r'E:\SSURGO\export'
-
-    # Parameter # 2: (Required) Input Directory where the original SDM spatial and tabular data exist.
-    wssLibrary = arcpy.GetParameterAsText(2)
-    #wssLibrary = r'F:\2022_SSURGO'
-
-    # Path to the Master Regional table that contains SSAs by region with extra extent
-    #regionalTable = os.path.dirname(sys.argv[0]) + os.sep + "SSURGO_Soil_Survey_Area.gdb\junkTable"
-    regionalTable = os.path.join(os.path.join(os.path.dirname(sys.argv[0]),"SSURGO_Soil_Survey_Area.gdb"),"SSA_Regional_Ownership_MASTER")
-
-    # Bail if reginal master table is not found
-    if not arcpy.Exists(regionalTable):
-        AddMsgAndPrint("\nRegional Master Table is missing from " + os.path.dirname(sys.argv[0]),2)
-        exit()
+    # Parameter 2: Input Directory where the 
+    # original SDM spatial and tabular data exist.
+    ssurgo_p = arcpy.GetParameterAsText(2)
 
     startTime = datetime.now()
-    env.overwriteOutput = True
 
-    arcpy.env.parallelProcessingFactor = "85%"
-
-    # The entire Main code in a try statement....Let the fun begin!
     try:
-
-        # Get a list of Regional areasymbols to download from the Regional Master Table.  [u'WI001, u'WI003']
-        regionalASlist = getRegionalAreaSymbolList(regionalTable,regionChoice)
-        #regionalASlist = ['WI021','WI025','WI027','WI029']
-
-        # Exit if list of regional areasymbol list is empty
-        if not len(regionalASlist) > 0:
-            AddMsgAndPrint("\n\nNo Areasymbols were selected from Regional SSA Ownership table. Possible problem with table.....EXITING",2)
+        # Generate dictionary {soil survey areas: directroy path}
+        ssa_l = getSSARegionList(ssurgo_p, region_opt)
+        # Exit if dictionary is empty
+        if not ssa_l:
             exit()
+        arcpy.AddMessage(f"{len(ssa_l)} surveys are in {region_opt}")
 
-        # sort the regional list
-        regionalASlist.sort()
-
-        # check for missing Regional SSURGO Datasets or duplicates; Exit if any are found
-        AddMsgAndPrint("\n" + "Validating local Regional SSURGO datasets.......",0)
-        ssurgoDatasetDict = validateSSAs(regionalASlist,wssLibrary)
-
-        if len(ssurgoDatasetDict) < 1:
-            AddMsgAndPrint("\nAll " + regionChoice + " SSURGO datasets are missing from " + os.path.basename(wssLibrary) + " directory \n\tThere must also not be duplicate SSURGO datasets",2)
+        # Create Empty Regional Transactional File Geodatabase
+        RTSD_n = createFGDB(region_opt.replace(' ', ''), output_p)
+        if not RTSD_n:
             exit()
-
-        # There are some SSAs missing from local library
-        elif len(regionalASlist) != len(ssurgoDatasetDict):
-            AddMsgAndPrint("\n" + regionChoice + " is assigned " + str(len(regionalASlist)) + " SSAs --- Missing " + str(len(regionalASlist) - len(ssurgoDatasetDict)) + " SSAs" ,2)
-            AddMsgAndPrint("\nALL SSURGO datasets assigned to " + regionChoice + " must be present to continue",2)
-            AddMsgAndPrint("Download the missing SSURGO Datasets using the 'Download SSURGO by Region' tool",2)
-            exit()
-
-        else:
-            AddMsgAndPrint("\n" + str(len(regionalASlist)) + " surveys will be merged to create the " + regionChoice + " Transactional Spatial Database", 0)
-
-        # -------------------------------------------------------------------------------------- Create Empty Regional Transactional File Geodatabase
-        RTSDname = createFGDB(regionChoice, outputFolder)
-
-        if not RTSDname:
-            AddMsgAndPrint("\nFailed to Initiate Empty Regional Transactional Database.  Error in createFGDB() function. Exiting!",2)
-            exit()
-
         # Path to Regional FGDB
-        FGDBpath = os.path.join(outputFolder,RTSDname)
+        gdb_p = f"{output_p}/{RTSD_n}"
+        fd_p = f"{gdb_p}/FD_RTSD"
 
+        # --- Import Feature descriptions
+        msg = importFeatdesc(ssa_l, ssurgo_p, gdb_p)
+        if msg:
+            arcpy.AddError(msg)
+        else:
+            arcpy.AddMessage('\nThe featdesc table has been populated.')
+        arcpy.SetProgressorLabel('Appending spatial features')
         # Path to feature dataset that contains SSURGO feature classes
-        FDpath = os.path.join(FGDBpath,"FD_RTSD")
-
-        # SSURGO layer Name
-        soilFC = "MUPOLYGON"
-        muLineFC = "MULINE"
-        muPointFC = "MUPOINT"
-        soilSaFC = "SAPOLYGON"
-        featPointFC = "FEATPOINT"
-        featLineFC = "FEATLINE"
-
-        # Set environment variables
-        env.workspace = FDpath
-
-        # Parse Datum from MUPOLYGON; can only get datum from a GCS not a projected CS
-        spatialRef = str(arcpy.CreateSpatialReference_management("#",soilFC,"#","#","#","#"))
-
-        userDatum_Start = spatialRef.find("DATUM") + 7
-        userDatum_Stop = spatialRef.find(",", userDatum_Start) - 1
-        userDatum = spatialRef[userDatum_Start:userDatum_Stop]
-
-        AddMsgAndPrint("\tOutput Coordinate System: " + arcpy.Describe(soilFC).spatialReference.name,0)
-        AddMsgAndPrint("\tOutput Datum: " + userDatum,0)
-
-        if userDatum == "D_North_American_1983":
-            AddMsgAndPrint("\tGeographic Transformation: WGS_1984_(ITRF00)_To_NAD_1983",0 )
-
-        env.geographicTransformations = "WGS_1984_(ITRF00)_To_NAD_1983"  # WKID 108190
-        env.outputCoordinateSystem = spatialRef
-
-        arcpy.SetProgressorLabel("Gathering information about Soil Survey datasets...")
-
-        # ------------------------------------------------------------------------------------- Establish Dictionaries, lists and Fieldmappings
-        # Dictionary containing approx center of SSA (key) and the SSURGO layer path (value)
-        soilShpDict = dict()   # {-4002.988250799742: 'K:\\FY2014_SSURGO_R10_download\\soil_wi063\\spatial\\soilmu_a_wi063.shp'}
-        muLineShpDict = dict()
-        muPointShpDict = dict()
-        soilSaShpDict = dict()
-        featPointShpDict = dict()
-        featLineShpDict = dict()
-
-        # lists containing SSURGO layer paths sorted according to the survey center key
-        # This list will be passed over to the Merge command
-        soilShpList = list()
-        muLineShpList = list()
-        muPointShpList = list()
-        soilSaShpList = list()
-        featPointShpList = list()
-        featLineShpList = list()
-
-        # Create FieldMappings objects that will contain all of the fields from each survey
-        # (fieldmap).  FMs will be used to remove every field but AREASYMBOL, FEATSYM, MUSYM
-        soilsFM = arcpy.FieldMappings()
-        muLineFM = arcpy.FieldMappings()
-        muPointFM = arcpy.FieldMappings()
-        soilSaFM = arcpy.FieldMappings()
-        featPointFM = arcpy.FieldMappings()
-        featLineFM = arcpy.FieldMappings()
-
-        # Field map object that will contain the original MUSYM; it will be calculated from musym field
-        origMUSYMfm = arcpy.FieldMap()
-
-        # list containing the (Xcenter * Ycenter) for every SSURGO soil layer
-        extentList = list()
-
-        # ------------------------------------------------------------------------------------- Populate Dictionaries, lists and Fieldmappings
-        arcpy.SetProgressor("step", "Gathering information about Soil Survey datasets...", 1, len(ssurgoDatasetDict), 1)
-
-        for SSA in ssurgoDatasetDict:
-            arcpy.SetProgressorLabel("Gathering Info for: " + SSA)
-
-            # Paths to individual SSURGO layers
-            soilShpPath = os.path.join(os.path.join(ssurgoDatasetDict[SSA],"spatial"),"soilmu_a_" + SSA.lower() + ".shp")
-            muLineShpPath = os.path.join(os.path.join(ssurgoDatasetDict[SSA],"spatial"),"soilmu_l_" + SSA.lower() + ".shp")
-            muPointShpPath = os.path.join(os.path.join(ssurgoDatasetDict[SSA],"spatial"),"soilmu_p_" + SSA.lower() + ".shp")
-            soilSaShpPath = os.path.join(os.path.join(ssurgoDatasetDict[SSA],"spatial"),"soilsa_a_" + SSA.lower() + ".shp")
-            featPointShpPath = os.path.join(os.path.join(ssurgoDatasetDict[SSA],"spatial"),"soilsf_p_" + SSA.lower() + ".shp")
-            featLineShpPath = os.path.join(os.path.join(ssurgoDatasetDict[SSA],"spatial"),"soilsf_l_" + SSA.lower() + ".shp")
-
-            # Calculate the approximate center of a given survey using the SSA
-            desc = arcpy.Describe(soilSaShpPath)
-            shpExtent = desc.extent
-            XCntr = (shpExtent.XMin + shpExtent.XMax) / 2.0
-            YCntr = (shpExtent.YMin + shpExtent.YMax) / 2.0
-            surveyCenter = XCntr * YCntr  # approximate center of survey
-
-            # Add survey center and SSURGO paths to respective dicts
-            # {-4002.988250799742: 'K:\\FY2014_SSURGO_R10_download\\soil_wi063\\spatial\\soilmu_a_wi063.shp'}
-            soilShpDict[surveyCenter] = soilShpPath
-            muLineShpDict[surveyCenter] = muLineShpPath
-            muPointShpDict[surveyCenter] = muPointShpPath
-            soilSaShpDict[surveyCenter] = soilSaShpPath
-            featPointShpDict[surveyCenter] = featPointShpPath
-            featLineShpDict[surveyCenter] = featLineShpPath
-
-            extentList.append(surveyCenter)
-
-            # Add all field names from all of the SSURGO layers into their respective fieldMappings
-##            soilsFM.addTable(soilShpPath)
-##            muLineFM.addTable(muLineShpPath)
-##            muPointFM.addTable(muPointShpPath)
-##            soilSaFM.addTable(soilSaShpPath)
-##            featPointFM.addTable(featPointShpPath)
-##            featLineFM.addTable(featLineShpPath)
-
-            #origMUSYMfm.addInputField(soilShpPath,"musym")
-
-            del soilShpPath, muLineShpPath, muPointShpPath, soilSaShpPath, featPointShpPath, featLineShpPath, desc, shpExtent, XCntr, YCntr, surveyCenter
-            arcpy.SetProgressorPosition()
-
-        # Add 'orig_musym' to field map
-##        origMusym = origMUSYMfm.outputField
-##        origMusym.name = 'orig_musym'
-##        origMusym.aliasName = 'Original_MUSYM'
-##        origMUSYMfm.outputField = origMusym
-##
-##        origMUSYMfm.mergeRule = 'First'
-##        soilsFM.addFieldMap(origMUSYMfm)
-
-        # ---------------------------------------------------------------------------------------------------------- Begin the Merge Process
-        # Sort shapefiles by extent so that the drawing order is continous
-        extentList.sort()
-
-        # number of soil layers to merge should be equal to number of Regional SSAs
-        #if len(soilShpDict) == len(regionalASlist):
-        if len(soilShpDict) > 0:
-
-            # Add SSURGO paths to their designated lists according to the survey's center so that they draw continously
-            # If the layer has features then add it to the merge list otherwise skip it.  This was added b/c it turns
-            # out that empty mapunit point .shp are in line geometry and not point geometry
-            for surveyCenter in extentList:
-
-                soilShpList.append(soilShpDict[surveyCenter])
-                soilSaShpList.append(soilSaShpDict[surveyCenter])
-
-                if int(arcpy.GetCount_management(muLineShpDict[surveyCenter]).getOutput(0)) > 0:
-                    muLineShpList.append(muLineShpDict[surveyCenter])
-
-                if int(arcpy.GetCount_management(muPointShpDict[surveyCenter]).getOutput(0)) > 0:
-                    muPointShpList.append(muPointShpDict[surveyCenter])
-
-                if int(arcpy.GetCount_management(featPointShpDict[surveyCenter]).getOutput(0)) > 0:
-                    featPointShpList.append(featPointShpDict[surveyCenter])
-
-                if int(arcpy.GetCount_management(featLineShpDict[surveyCenter]).getOutput(0)) > 0:
-                    featLineShpList.append(featLineShpDict[surveyCenter])
-
-        # Some reason some surveys are missing......Exit
+        features = [('SAPOLYGON', 'soilsa_a'),
+                    ('MUPOLYGON', 'soilmu_a'),
+                    ('MULINE', 'soilmu_l'),
+                    ('MUPOINT', 'soilmu_p'),
+                    ('FEATLINE', 'soilsf_l'),
+                    ('FEATPOINT', 'soilsf_p')]
+        # for feat in features:
+        # SAPOLYGON must be run first to sort `survey_l`
+        output = appendFeatures(fd_p, features[0], ssurgo_p, ssa_l)
+        if 'surveys' in output:
+            survey_l = output['surveys']
+            arcpy.AddMessage("\nSuccessfully appended SAPOLYGON")
         else:
-            if arcpy.Exists(FGDBpath):
-                arcpy.Delete_management(FGDBpath)
-
-            AddMsgAndPrint("\n\nAll surveys had incompatible datums! Datum needs to be in NAD83 or WGS84.",2)
+            arcpy.AddError("Failed to append SAPOLYGON")
+            arcpy.AddError(output['error'])
             exit()
-
-        # set progressor object which allows progress information to be passed for every merge complete
-        arcpy.SetProgressor("step", "Beginning the append process...", 0, 6, 1)
-        AddMsgAndPrint("\n" + "Beginning the append process")
-
-        # ------------------------------------------------------------------------------------------------ Merge Soil Mapunit Polygons
-        arcpy.SetProgressorLabel("Appending " + str(len(soilShpList)) + " Soil Mapunit Layers")
-
-        try:
-##            for field in soilsFM.fields:
-##                if field.name not in ['AREASYMBOL','MUSYM','orig_musym']:
-##                    soilsFM.removeFieldMap(soilsFM.findFieldMapIndex(field.name))
-
-            soilFCpath = os.path.join(FDpath, soilFC)
-            #arcpy.Merge_management(soilShpList, soilFCpath) #soilsFM)
-            arcpy.Append_management(soilShpList, soilFCpath, "NO_TEST")
-
-            AddMsgAndPrint("\tSuccessfully appended SSURGO Soil Mapunit Polygons")
-
-            if not addAttributeIndex(soilFCpath,["AREASYMBOL","MUSYM"],False): pass
-
-            arcpy.SetProgressorPosition()
-
-        except:
-            print_exception()
-
-        # ---------------------------------------------------------------------------------------------- Merge Soil Mapunit Lines
-        muLineFCpath = os.path.join(FDpath, muLineFC)
-        if len(muLineShpList) > 0:
-
-            arcpy.SetProgressorLabel("Appending " + str(len(muLineShpList)) + " SSURGO Soil Mapunit Line Layers")
-
-            # Transactional FGDB; remove any field other than AREASYMBOL and MUSYM
-##            for field in muLineFM.fields:
-##                if field.name not in ["AREASYMBOL","MUSYM"]:
-##                    muLineFM.removeFieldMap(muLineFM.findFieldMapIndex(field.name))
-
-            #arcpy.Merge_management(muLineShpList, muLineFCpath) #muLineFM)
-            arcpy.Append_management(muLineShpList, muLineFCpath, "NO_TEST")
-
-            AddMsgAndPrint("\tSuccessfully appended SSURGO Soil Mapunit Lines")
-            if not addAttributeIndex(muLineFCpath,["AREASYMBOL","MUSYM"],False): pass
-
-        else:
-            AddMsgAndPrint("\tNo SSURGO Soil Mapunit Lines to merge")
-
-        arcpy.SetProgressorPosition()
-
-        # ----------------------------------------------------------------------------------------------- Merge Soil Mapunit Points
-        muPointFCpath = os.path.join(FDpath, muPointFC)
-        if len(muPointShpList) > 0:
-
-            arcpy.SetProgressorLabel("Appending " + str(len(muPointShpList)) + "SSURGO Soil Mapunit Point Layers")
-
-            # Transactional FGDB; remove any field other than AREASYMBOL and MUSYM
-##            for field in muPointFM.fields:
-##                if field.name not in ["AREASYMBOL","MUSYM"]:
-##                    muPointFM.removeFieldMap(muPointFM.findFieldMapIndex(field.name))
-
-            #arcpy.Merge_management(muPointShpList, muPointFCpath) #muPointFM)
-            arcpy.Append_management(muPointShpList, muPointFCpath, "NO_TEST")
-
-            AddMsgAndPrint("\tSuccessfully appended SSURGO Soil Mapunit Points")
-            if not addAttributeIndex(muPointFCpath,["AREASYMBOL","MUSYM"],False): pass
-
-        else:
-            AddMsgAndPrint("\tNo SSURGO Soil Mapunit Points to merge")
-
-        arcpy.SetProgressorPosition()
-
-        # ---------------------------------------------------------------------------------------------- Merge Soil Survey Area
-        arcpy.SetProgressorLabel("Appending " + str(len(soilSaShpList)) + " SSURGO Soil Survey Area Layers")
-
-        # Transactional FGDB; remove any field other than AREASYMBOL and MUSYM
-##        for field in soilSaFM.fields:
-##            if field.name not in ["AREASYMBOL"]:
-##                soilSaFM.removeFieldMap(soilSaFM.findFieldMapIndex(field.name))
-
-        soilSaFCpath = os.path.join(FDpath, soilSaFC)
-        #arcpy.Merge_management(soilSaShpList, soilSaFCpath, soilSaFM)
-        arcpy.Append_management(soilSaShpList, soilSaFCpath, "NO_TEST")
-
-        AddMsgAndPrint("\tSuccessfully appended SSURGO Soil Survey Area Polygons")
-        if not addAttributeIndex(soilSaFCpath,["AREASYMBOL"],False): pass
-
-        arcpy.SetProgressorPosition()
-
-        # --------------------------------------------------------------------------------------------- Merge Special Point Features
-        featPointFCpath = os.path.join(FDpath, featPointFC)
-        if len(featPointShpList) > 0:
-
-            arcpy.SetProgressorLabel("Appending " + str(len(featPointShpList)) + " SSURGO Special Point Feature Layers")
-
-            # Transactional FGDB; remove any field other than AREASYMBOL and FEATSYM
-##            for field in featPointFM.fields:
-##                if field.name not in ["AREASYMBOL", "FEATSYM"]:
-##                    featPointFM.removeFieldMap(featPointFM.findFieldMapIndex(field.name))
-
-            #arcpy.Merge_management(featPointShpList, featPointFCpath)# featPointFM)
-            arcpy.Append_management(featPointShpList, featPointFCpath, "NO_TEST")
-
-            AddMsgAndPrint("\tSuccessfully appended SSURGO Special Point Features")
-            if not addAttributeIndex(featPointFCpath,["AREASYMBOL", "FEATSYM"],False): pass
-
-        else:
-            AddMsgAndPrint("\tNo SSURGO Soil Special Point Features to merge")
-
-        arcpy.SetProgressorPosition()
-
-        # -------------------------------------------------------------------------------------------- Merge Special Line Features
-        featLineFCpath = os.path.join(FDpath, featLineFC)
-        if len(featLineShpList) > 0:
-
-            arcpy.SetProgressorLabel("Appending " + str(len(featLineShpList)) + " SSURGO Special Line Feature Layers")
-
-            # Transactional FGDB; remove any field other than AREASYMBOL and FEATSYM
-##            for field in featLineFM.fields:
-##                if field.name not in ["AREASYMBOL", "FEATSYM"]:
-##                    featLineFM.removeFieldMap(featLineFM.findFieldMapIndex(field.name))
-
-            #arcpy.Merge_management(featLineShpList, featLineFCpath)# featLineFM)
-            arcpy.Append_management(featLineShpList, featLineFCpath, "NO_TEST")
-
-            AddMsgAndPrint("\tSuccessfully appended SSURGO Special Line Features")
-            if not addAttributeIndex(featLineFCpath,["AREASYMBOL", "FEATSYM"],False): pass
-
-        else:
-            AddMsgAndPrint("\tNo SSURGO Special Line Features to merge")
-
-        arcpy.SetProgressorPosition()
-        arcpy.ResetProgressor()
-
-        # ---------------------------------------------------------------------------------------------------------- Import Feature descriptions
-        if not ImportFeatureFiles(ssurgoDatasetDict):
-            AddMsgAndPrint("\nError importing feature files into the featdesc table",2)
+        for feat in features[1:]:
+            msg = appendFeatures(fd_p, feat, ssurgo_p, ssa_l)
+            if 'surveys' in msg:
+                arcpy.AddMessage(f"Successfully appended {feat[0]}")
+            else:
+                arcpy.AddError(f"Failed to append {feat[0]}")
+                arcpy.AddError(msg['error'])
+                exit()
+        # paramSet = [{'feat': feat} for feat in features[1:]]
+        # constSet = {'ssa_l': ssa_l, 'input_f': ssurgo_p, 'fd_p': fd_p}
+        # threadCount = 4
+        # for paramBack, output in concurrently(appendFeatures,
+        #                                      threadCount,
+        #                                      paramSet,
+        #                                      constSet):
+        #     try:
+        #         if 'surveys' in output:
+        #             arcpy.AddMessage(
+        #                 f"Successfully appended {paramBack['feat'][0]}")
+        #         else:
+        #             arcpy.AddError(f"Failed to append {paramBack['feat'][0]}")
+        #             arcpy.AddError(output['error'])
+        #             exit()
+        #     except GeneratorExit:
+        #         pass
 
         # ---------------------------------------------------------------------------------------------------------- Setup Topology
         # Validate Topology with a cluster of 0.1 meters
-        if createTopology(FDpath):
-            arcpy.SetProgressorLabel("Validating Topology at 0.1 meters")
-            arcpy.ValidateTopology_management(os.path.join(FDpath,"FD_RTSD_Topology"))
-            AddMsgAndPrint("\tValidated Topology at 0.1 meters",0)
+        if createTopology(fd_p):
+            arcpy.SetProgressorLabel("Validating Topology")
+            arcpy.ValidateTopology_management(os.path.join(fd_p,"FD_RTSD_Topology"))
+            arcpy.AddMessage("\tValidated Topology at 0.1 meters")
 
         else:
-            AddMsgAndPrint("\n\tFailed to Create Topology. Create Topology Manually",2)
+            arcpy.AddError(
+                "\n\tFailed to Create Topology. Create Topology Manually")
 
-        # ---------------------------------------------------------------- Create Relationship class between project_record and SAPOLYGON feature class
-        arcpy.SetProgressorLabel("Creating Relationship Class between Project_Record & SAPOLYGON")
-        prjRecTable = os.path.join(FGDBpath,'ProjectRecord' + os.sep + 'Project_Record')
-        saPolyPath = os.path.join(FDpath,soilSaFC)
-        relName = "x" + os.path.basename(prjRecTable).replace("_","") + "_" + soilSaFC
-        arcpy.CreateRelationshipClass_management(prjRecTable, saPolyPath, relName, "SIMPLE", "> SAPOLYGON", "< Project_Record", "NONE", "ONE_TO_ONE", "NONE", "AREASYMBOL", "AREASYMBOL", "", "")
-        AddMsgAndPrint("\nSuccessfully Created Relationship Class")
+        # --- Create Relationship class between project_record and SAPOLYGON
+        arcpy.SetProgressorLabel("Creating Relationship Class between "
+                                 "Project_Record & SAPOLYGON")
+        pr_p = f"{gdb_p}/ProjectRecord/Project_Record"
+        sa_p = f"{fd_p}/SAPOLYGON"
+        rel_n = "xProjectRecord_SAPOLYGON"
+        env.workspace = gdb_p
+        arcpy.CreateRelationshipClass_management(
+            pr_p, sa_p, rel_n, "SIMPLE", "> SAPOLYGON", "< Project_Record",
+            "NONE", "ONE_TO_ONE", "NONE", "AREASYMBOL", "AREASYMBOL", "", "")
+        arcpy.AddMessage("\nSuccessfully Created Relationship Class")
 
-        arcpy.SetProgressorLabel("Compacting " + os.path.basename(FGDBpath))
-        arcpy.Compact_management(FGDBpath)
-        AddMsgAndPrint("\nSuccessfully Compacted " + os.path.basename(FGDBpath))
+        arcpy.SetProgressorLabel("Compacting " + RTSD_n)
+        arcpy.Compact_management(gdb_p)
+        arcpy.AddMessage("\nSuccessfully Compacted " + RTSD_n)
 
-        # --------------------------------------------------------------------------------------------------------  Add Field Aliases to Spatial Layers -tabular already has aliases embedded.
-        if updateAliasNames(regionChoice, FDpath):
-            AddMsgAndPrint("\nSuccessfully Updated Alias Names for Feature Classes within " + os.path.basename(FGDBpath))
+        # ---  Add Aliases to Spatial Features
+        if updateAliasNames(region_opt, gdb_p):
+            arcpy.AddMessage(
+                "\nSuccessfully updated Alias Names of the Spatial Features")
         else:
-            AddMsgAndPrint("\nUnable to Update Alias Names for Feature Classes within " + os.path.basename(FGDBpath),2)
+            arcpy.AddWarning(
+                "\nFailed to update Alias Names of the Spatial Features")
 
-        # -------------------------------------------------------------------------------------------------------- Enable Tracking
-        for fc in [soilFCpath,muLineFCpath,muPointFCpath,featPointFCpath,featPointFCpath]:
-            arcpy.EnableEditorTracking_management(fc,'Creator','Creation_Date','Editor','Last_Edit_Date','ADD_FIELDS')
-
-        # -----------------------------------------------------------------------------------------
-        AddMsgAndPrint("\n*****************************************************************************************",1)
-        AddMsgAndPrint("Total # of SSURGO Datasets Appended: " + str(splitThousands(len(soilShpList))),1)
-        AddMsgAndPrint("\tTotal # of Mapunit Polygons: " + str(splitThousands(arcpy.GetCount_management(FDpath + os.sep + soilFC).getOutput(0))),1)
-        AddMsgAndPrint("\tTotal # of Mapunit Lines: " + str(splitThousands(arcpy.GetCount_management(FDpath + os.sep + muLineFC).getOutput(0))),1)
-        AddMsgAndPrint("\tTotal # of Mapunit Points: " + str(splitThousands(arcpy.GetCount_management(FDpath + os.sep + muPointFC).getOutput(0))),1)
-        AddMsgAndPrint("\tTotal # of Special Feature Points: " + str(splitThousands(arcpy.GetCount_management(FDpath + os.sep + featPointFC).getOutput(0))),1)
-        AddMsgAndPrint("\tTotal # of Special Feature Lines: " + str(splitThousands(arcpy.GetCount_management(FDpath + os.sep + featLineFC).getOutput(0))),1)
-
-        #arcpy.RefreshCatalog(outputFolder)
+        arcpy.AddMessage('***************************************************')
+        # --- Enable Tracking
+        for fc in features[1:]:
+            fc_p = f"{fd_p}/{fc[0]}"
+            arcpy.EnableEditorTracking_management(
+                fc_p, 'Creator', 'Creation_Date', 'Editor',
+                'Last_Edit_Date', 'ADD_FIELDS')
+            count = int(arcpy.GetCount_management(fc_p)[0])
+            arcpy.AddMessage(
+                f"Total number of {fc[0]} features: "
+                f"{count:,}")
 
         endTime = datetime.now()
-        AddMsgAndPrint("\nTotal Time: " + str(endTime - startTime),0)
+        arcpy.AddMessage("\nTotal Time: " + str(endTime - startTime))
 
-    # This is where the fun ends!
     except arcpy.ExecuteError:
-        AddMsgAndPrint(arcpy.GetMessages(2),2)
-
+        func = sys._getframe().f_code.co_name
+        arcpy.AddError(arcpyErr(func))
     except:
-        errorMsg()
+        func = sys._getframe().f_code.co_name
+        arcpy.AddError(pyErr(func))
