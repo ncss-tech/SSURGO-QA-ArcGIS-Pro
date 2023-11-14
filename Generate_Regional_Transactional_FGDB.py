@@ -12,9 +12,17 @@ Created on: 1/16/2014
     @organization: National Soil Survey Center, USDA-NRCS
     @email: alexander.stum@usda.gov
 
-@modified 11/03/2023
+@modified 11/13/2023
     @by: Alexnder Stum
-@version: 2.2
+@version: 2.3
+
+# ---
+Updated 11/13/2023 - Alexander Stum
+- If a topology of the same name was in the Table of Contents, the 
+AddFeatureToTopology function would use that topology instead of the one within
+the FDS of the actual feature of interest and would throw an error. Fixed by
+using full path to topology layer.
+- Removed setting env output spatial reference as the FDS determines that.
 
 # ---
 Updated 11/03/2023 - Alexander Stum
@@ -30,6 +38,8 @@ returns an Error, fixed.
 - Fixed bugs in createTopology function, requires explicit paths of features
 when adding rules.
 - Fixed references to xml files
+- Removed Concurrently function as it couldn't be successfully utililized, 
+as I could not find a way to enforce transformation within each kernel.
 
 # ---
 Updated  09/30/2023 - Alexander Stum
@@ -91,8 +101,6 @@ import json
 import pandas as pd
 from arcpy import env
 from datetime import datetime
-import concurrent.futures as cf
-import itertools as it
 from urllib.request import urlopen
 from importlib import reload
 import query_download
@@ -147,86 +155,6 @@ def arcpyErr(func: str) -> str:
         return msgs
     except:
         return "Error in arcpyErr method"
-    
-def concurrently(fn, max_concurrency, iterSets, constSets ):
-    """
-    Adapted from 
-    https://github.com/alexwlchan/concurrently/blob/main/concurrently.py
-    
-
-    Generates (input, output) tuples as the calls to ``fn`` complete.
-
-    See https://alexwlchan.net/2019/10/adventures-with-concurrent-futures/ 
-    for an explanation of how this function works.
-    
-    Parameters
-    ----------
-    fn : function
-        The function that it to be run in parallel.
-        
-    max_concurrency : int
-        Maximum number of processes, parameter for itertools islice function.
-        
-    iterSets : list
-        List of dictionaries that will be iterated through. The keys of the 
-        dictionary must be the same for each dictionary and align with keywords 
-        of the function.
-        
-    constSets : dict
-        Dictionary of parameters that constant for each iteration of the 
-        function ``fn``. Dictionary keys must align with function keywords.
-
-    Yields
-    ------
-    A tuple with the original input parameters and the results from the called
-    function ``fn``.
-    """
-    try:
-        # Make sure we get a consistent iterator throughout, rather than
-        # getting the first element repeatedly.
-        # count = len(iterSets)
-        fn_inputs = iter(iterSets)
-
-        with cf.ThreadPoolExecutor() as executor:
-            # initialize first set of processes
-            futures = {
-                executor.submit(fn, **params, **constSets): params
-                for params in it.islice(fn_inputs, max_concurrency)
-            }
-            # Wait for a future to complete, returns sets of complete and 
-            # incomplete futures
-            while futures:
-                done, _ = cf.wait(
-                    futures, return_when = cf.FIRST_COMPLETED
-                )
-
-                for fut in done:
-                    # once process is done clear it out, yield results 
-                    # and params
-                    original_input = futures.pop(fut)
-                    output = fut.result()
-                    del fut
-                    yield original_input, output
-
-                # Sends another set of processes equivalent in size to those 
-                # just completed to executor to keep it at max_concurrency in 
-                # the pool at a time, to keep memory consumption down.
-                futures.update({
-                    executor.submit(fn, **params, **constSets): params
-                    for params in it.islice(fn_inputs, len(done))
-                })
-    except GeneratorExit:
-        raise
-        # arcpy.AddError("Need to do some clean up.")
-        # yield 2, 'yup'
-    except arcpy.ExecuteError:
-        func = sys._getframe(  ).f_code.co_name
-        msgs = arcpyErr(func)
-        yield [2, msgs]
-    except:
-        func = sys._getframe(  ).f_code.co_name
-        msgs = pyErr(func)
-        yield [2, msgs]
 
 
 def getDownloadString(ssa_l: list[str]) -> list[str]:
@@ -483,7 +411,7 @@ def createFGDB(region_opt: str, output_p: str) -> str:
         arcpy.CreateFileGDB_management(output_p, newName)
         arcpy.ImportXMLWorkspaceDocument_management(
             fgdb_p, xmlFile, "SCHEMA_ONLY", "DEFAULTS"
-            )
+        )
         arcpy.AddMessage(f"Successfully Created RTSD File GDB: {fgdb_p}")
 
         return newName
@@ -498,11 +426,7 @@ def createFGDB(region_opt: str, output_p: str) -> str:
         return ''
 
 
-def importFeatdesc(
-        ssa_l: list[str],
-        input_p: str,
-        gdb_p: str
-        ) -> str:
+def importFeatdesc(ssa_l: list[str], input_p: str, gdb_p: str) -> str:
     """Runs through each SSURGO download folder and imports the rows into the 
     specified ``table`` . These tables have unique information from each 
     survey area.
@@ -543,10 +467,8 @@ def importFeatdesc(
                 if not os.path.exists(txt_p):
                     return f"{txt_p} does not exist"
             csvReader = csv.reader(
-                open(txt_p, 'r'), 
-                delimiter='|', 
-                quotechar='"'
-                )
+                open(txt_p, 'r'), delimiter='|', quotechar='"'
+            )
             for row in csvReader:
                 # replace empty sets with None; exclude feature key
                 row = list(None if not v else v for v in row)[:-1]
@@ -592,6 +514,7 @@ def createTopology(fd_p: str) -> bool:
         env.workspace = fd_p
         topo_n = "FD_RTSD_Topology"
         topo_p = f"{fd_p}/{topo_n}"
+        # # To create a unique name
         arcpy.SetProgressor("step", "Creating Topology", 0, 3, 1)
 
         # Create New topology
@@ -599,61 +522,84 @@ def createTopology(fd_p: str) -> bool:
         arcpy.CreateTopology_management(fd_p, topo_n, 0.2)
 
         arcpy.AddMessage(
-            "\nCreated Topology: FD_RTSD_Topology at 0.2m cluster tolerance")
+            "\nCreated Topology: FD_RTSD_Topology at 0.2m cluster tolerance"
+        )
         arcpy.SetProgressorPosition()
         
         # Add feature classes to topology
         arcpy.SetProgressorLabel(
             "Creating Topology: Adding Feature Classes to Topology")
         arcpy.AddFeatureClassToTopology_management(
-            topo_n, f"{fd_p}/MUPOLYGON", 1, 1)
+            topo_p, f"{fd_p}/MUPOLYGON", 1, 1
+        )
         arcpy.AddFeatureClassToTopology_management(
-            topo_n, f"{fd_p}/MUPOINT", 1, 1)
+            topo_p, f"{fd_p}/MUPOINT", 1, 1
+        )
         arcpy.AddFeatureClassToTopology_management(
-            topo_n, f"{fd_p}/MULINE", 1, 1)
+            topo_p, f"{fd_p}/MULINE", 1, 1
+        )
         arcpy.AddFeatureClassToTopology_management(
-            topo_n, f"{fd_p}/FEATPOINT", 1, 1)
+            topo_p, f"{fd_p}/FEATPOINT", 1, 1
+        )
         arcpy.AddFeatureClassToTopology_management(
-            topo_n, f"{fd_p}/FEATLINE", 1, 1)
+            topo_p, f"{fd_p}/FEATLINE", 1, 1
+        )
         arcpy.SetProgressorPosition()
 
         # Add Topology Rules
         arcpy.SetProgressorLabel("Creating Topology: Adding Rules to Topology")
         arcpy.AddRuleToTopology_management(
-            topo_p, "Must Not Overlap (Area)", f"{fd_p}/MUPOLYGON")
+            topo_p, "Must Not Overlap (Area)", f"{fd_p}/MUPOLYGON"
+        )
         arcpy.AddRuleToTopology_management(
-            topo_p, "Must Not Have Gaps (Area)", f"{fd_p}/MUPOLYGON")
+            topo_p, "Must Not Have Gaps (Area)", f"{fd_p}/MUPOLYGON"
+        )
         arcpy.AddRuleToTopology_management(
-            topo_p, "Must Not Overlap (Line)", f"{fd_p}/FEATLINE")
+            topo_p, "Must Not Overlap (Line)", f"{fd_p}/FEATLINE"
+        )
         arcpy.AddRuleToTopology_management(
-            topo_p, "Must Not Intersect (Line)", f"{fd_p}/FEATLINE")
+            topo_p, "Must Not Intersect (Line)", f"{fd_p}/FEATLINE"
+        )
         arcpy.AddRuleToTopology_management(
-            topo_p, "Must Not Self-Overlap (Line)", f"{fd_p}/FEATLINE")
+            topo_p, "Must Not Self-Overlap (Line)", f"{fd_p}/FEATLINE"
+        )
         arcpy.AddRuleToTopology_management(
-            topo_p, "Must Not Have Pseudo-Nodes (Line)", f"{fd_p}/FEATLINE")
+            topo_p, "Must Not Have Pseudo-Nodes (Line)", f"{fd_p}/FEATLINE"
+        )
         arcpy.AddRuleToTopology_management(
-            topo_p, "Must Not Self-Intersect (Line)", f"{fd_p}/FEATLINE")
+            topo_p, "Must Not Self-Intersect (Line)", f"{fd_p}/FEATLINE"
+        )
         arcpy.AddRuleToTopology_management(
-            topo_p, "Must Be Single Part (Line)", f"{fd_p}/FEATLINE")
+            topo_p, "Must Be Single Part (Line)", f"{fd_p}/FEATLINE"
+        )
         arcpy.AddRuleToTopology_management(
-            topo_p, "Must Be Disjoint (Point)", f"{fd_p}/FEATPOINT")
+            topo_p, "Must Be Disjoint (Point)", f"{fd_p}/FEATPOINT"
+        )
         arcpy.AddRuleToTopology_management(
-            topo_p, "Must Be Disjoint (Point)", f"{fd_p}/MUPOINT")
+            topo_p, "Must Be Disjoint (Point)", f"{fd_p}/MUPOINT"
+        )
         arcpy.AddRuleToTopology_management(
             topo_p, "Must Be Properly Inside (Point-Area)",
-            f"{fd_p}/FEATPOINT", "", f"{fd_p}/MUPOLYGON","")
+            f"{fd_p}/FEATPOINT", "", f"{fd_p}/MUPOLYGON",""
+        )
         arcpy.AddRuleToTopology_management(
-            topo_p, "Must Not Overlap (Line)", f"{fd_p}/MULINE")
+            topo_p, "Must Not Overlap (Line)", f"{fd_p}/MULINE"
+        )
         arcpy.AddRuleToTopology_management(
-            topo_p, "Must Not Intersect (Line)", f"{fd_p}/MULINE")
+            topo_p, "Must Not Intersect (Line)", f"{fd_p}/MULINE"
+        )
         arcpy.AddRuleToTopology_management(
-            topo_p, "Must Not Self-Overlap (Line)", f"{fd_p}/MULINE")
+            topo_p, "Must Not Self-Overlap (Line)", f"{fd_p}/MULINE"
+        )
         arcpy.AddRuleToTopology_management(
-            topo_p, "Must Not Have Pseudo-Nodes (Line)", f"{fd_p}/MULINE")
+            topo_p, "Must Not Have Pseudo-Nodes (Line)", f"{fd_p}/MULINE"
+        )
         arcpy.AddRuleToTopology_management(
-            topo_p, "Must Not Self-Intersect (Line)", f"{fd_p}/MULINE")
+            topo_p, "Must Not Self-Intersect (Line)", f"{fd_p}/MULINE"
+        )
         arcpy.AddRuleToTopology_management(
-            topo_p, "Must Be Single Part (Line)", f"{fd_p}/MULINE")
+            topo_p, "Must Be Single Part (Line)", f"{fd_p}/MULINE"
+        )
 
         arcpy.AddMessage("\tAdded 17 rules to the Topology")
         arcpy.SetProgressorPosition()
@@ -671,11 +617,9 @@ def createTopology(fd_p: str) -> bool:
         return False
 
 
-def appendFeatures(fd_p: str, 
-                   feat: tuple[str], 
-                   input_f: str, 
-                   ssa_l: list[str],
-                   )-> dict[list[str]]:  
+def appendFeatures(
+        fd_p: str, feat: tuple[str], input_f: str, ssa_l: list[str]
+    )-> dict[list[str]]:
     """Appends SSURGO spatial features 
     
     Appends from each SSURGO download to the respective SSURGO feature. Note 
@@ -710,17 +654,7 @@ def appendFeatures(fd_p: str,
         feat_gdb = feat[0]
         feat_shp = feat[1]
         env.geographicTransformations = 'WGS_1984_(ITRF00)_To_NAD_1983'
-        sf = ('PROJCS["NAD_1983_Contiguous_USA_Albers"'
-              ',GEOGCS["GCS_North_American_1983",DATUM["D_North_American_1983"'
-              ',SPHEROID["GRS_1980",6378137.0,298.257222101]],'
-              'PRIMEM["Greenwich",0.0],UNIT["Degree",0.0174532925199433]],'
-              'PROJECTION["Albers"],PARAMETER["False_Easting",0.0],'
-              'PARAMETER["False_Northing",0.0],'
-              'PARAMETER["Central_Meridian",-96.0],'
-              'PARAMETER["Standard_Parallel_1",29.5],'
-              'PARAMETER["Standard_Parallel_2",45.5],'
-              'PARAMETER["Latitude_Of_Origin",23.0],UNIT["Meter",1.0]]')
-        tran = 'WGS_1984_(ITRF00)_To_NAD_1983'
+
         # if SAPOLYGON, set up temp file to append a spatially indexed version
         if (feat_gdb != 'SAPOLYGON') or (len(ssa_l) == 1):
             feat_p = f"{fd_p}/{feat_gdb}"
@@ -730,10 +664,12 @@ def appendFeatures(fd_p: str,
         # feat_d = {} # path, count; for log file
         feat_l = []
         for ssa in ssa_l:
-            shp = f"{input_f}/{ssa.upper()}/spatial/{feat_shp}_{ssa}.shp"
+            shp = (f"{input_f}/{ssa.upper()}/spatial/"
+                   f"{feat_shp}_{ssa.lower()}.shp")
             if not os.path.exists(shp):
                 # Try SDM labeling
-                shp = f"{input_f}/soil_{ssa.lower()}/spatial/{feat_shp}_{ssa}.shp"
+                shp = (f"{input_f}/soil_{ssa.lower()}/spatial/"
+                       f"{feat_shp}_{ssa}.shp")
                 if not os.path.exists(shp):
                     arcpy.AddError()
                     return {'error': f"{shp} does not exist."}
@@ -745,20 +681,12 @@ def appendFeatures(fd_p: str,
         if feat_l:
             # arcpy.SetProgressorLabel(f"\tAppending features to {feat_gdb}")
             if feat_p != "memory/SAPOLYGON":
-                with arcpy.EnvManager(
-                    outputCoordinateSystem=sf,
-                    geographicTransformations=tran
-                ):
-                    arcpy.Append_management(feat_l, feat_p, "NO_TEST")
+                arcpy.Append_management(feat_l, feat_p, "NO_TEST")
                 cnt = int(arcpy.GetCount_management(feat_p).getOutput(0))
             else:
                 # Make virtual copy of template SAPOLYOGN to preserve metadata
                 arcpy.CopyFeatures_management(f"{fd_p}/{feat_gdb}", feat_p)
-                with arcpy.EnvManager(
-                    outputCoordinateSystem=sf,
-                    geographicTransformations=tran
-                ):
-                    arcpy.Append_management(feat_l, feat_p, "NO_TEST")
+                arcpy.Append_management(feat_l, feat_p, "NO_TEST")
                 feat_temp = feat_p
                 feat_p = f"{fd_p}/{feat_gdb}"
                 feat_desc = arcpy.Describe(feat_p)
@@ -775,22 +703,17 @@ def appendFeatures(fd_p: str,
             if cnt == count:
                 arcpy.management.AddSpatialIndex(feat_p)
                 arcpy.management.AddIndex(
-                    feat_p,
-                    "AREASYMBOL",
-                    "Indx_MupolyAreasymbol"
-                    )
-                # arcpy.AddMessage(f"\t{cnt} features were appended to "
-                #                  f"{feat_gdb}")
+                    feat_p, "AREASYMBOL", "Indx_MupolyAreasymbol"
+                )
             else:
                 msg = (f"\tOnly {cnt} of {count} features were "
-                               f"appended to {feat_gdb}")
+                       f"appended to {feat_gdb}")
                 return {'error': msg}
         
         elif (feat_gdb == 'SAPOLYGON') or (feat_gdb == 'MUPOLYGON'):
             msg = f"\tThere were no features appended to {feat_gdb}"
             return [msg]
         else: # No MUPOINT, MULINE, or special features
-            # ---- LOG
             pass
         return {'surveys': ssa_l}
             
@@ -826,7 +749,7 @@ def updateAliasNames(region: str, gdb_p: str) -> bool:
             'Southeast': 'SE', 'Southeast: PRUSVI': 'PV', 'Southwest': 'SW',
             'Southwest: HI': 'HI', 'Southwest: AmSamoa':'AS',
             'Southwest: PacBasin': 'PB', 'South Central': 'SC'
-            }
+        }
         aliasUpdate = 0
         if region == 'CONUS':
             alias_n = "CONUS"
@@ -834,20 +757,27 @@ def updateAliasNames(region: str, gdb_p: str) -> bool:
             alias_n = "RTSD " + region_d[region]
 
         arcpy.AlterAliasName(
-            f'{gdb_p}/FD_RTSD/FEATLINE', alias_n + " - Special Feature Lines")
+            f'{gdb_p}/FD_RTSD/FEATLINE', alias_n + " - Special Feature Lines"
+        )
         arcpy.AlterAliasName(
-            f'{gdb_p}/FD_RTSD/FEATPOINT', alias_n + " - Special Feature Points")
+            f'{gdb_p}/FD_RTSD/FEATPOINT', alias_n + " - Special Feature Points"
+        )
         arcpy.AlterAliasName(
-            f'{gdb_p}/FD_RTSD/MUPOLYGON', alias_n + " - Mapunit Polygon")
+            f'{gdb_p}/FD_RTSD/MUPOLYGON', alias_n + " - Mapunit Polygon"
+        )
         arcpy.AlterAliasName(
-            f'{gdb_p}/FD_RTSD/SAPOLYGON', alias_n + " - Survey Area Polygon")
+            f'{gdb_p}/FD_RTSD/SAPOLYGON', alias_n + " - Survey Area Polygon"
+        )
         arcpy.AlterAliasName(
-            f'{gdb_p}/FD_RTSD/MULINE', alias_n + " - Mapunit Line")
+            f'{gdb_p}/FD_RTSD/MULINE', alias_n + " - Mapunit Line"
+        )
         arcpy.AlterAliasName(
-            f'{gdb_p}/FD_RTSD/MUPOINT', alias_n + " - Mapunit Point")
+            f'{gdb_p}/FD_RTSD/MUPOINT', alias_n + " - Mapunit Point"
+        )
         arcpy.AlterAliasName(
             f'{gdb_p}/ProjectRecord/Project_Record',
-            alias_n + " - Project Record")
+            alias_n + " - Project Record"
+        )
         
         return True
 
@@ -903,13 +833,13 @@ Does not return anything.
 
         # iterate through every field
         for fieldToIndex in fieldList:
-
             # Make sure field exists in table - Just in case
             if not len(arcpy.ListFields(table,"*" + fieldToIndex))>0:
                 if verbose:
                     arcpy.AddError(
                         "\tAttribute index cannot be created for: "
-                        f"{fieldToIndex}. FIELD DOES NOT EXIST")
+                        f"{fieldToIndex}. FIELD DOES NOT EXIST"
+                    )
                     continue
 
             # list of indexes (attribute and spatial) within the table that are
@@ -926,18 +856,17 @@ Does not return anything.
                 # iterate through the existing indexes looking for a field match
                 for index in existingIndexes:
                     associatedFlds = index.fields
-
                     # iterate through the fields associated with existing index.
                     # Should only be 1 field since multiple fields are not 
                     # allowed in a single FGDB.
                     for fld in associatedFlds:
-
                         # Field is already part of an existing index
                         if fld.name == fieldToIndex:
                             if verbose:
                                 arcpy.AddWarning(
                                     f"\tAttribute Index for {fieldToIndex} "
-                                    "field already exists")
+                                    "field already exists"
+                                )
                                 bFieldIndexExists = True
 
                     # Field is already part of an existing index
@@ -948,15 +877,16 @@ Does not return anything.
             # Attribute field index does not exist.  Add one.
             if not bFieldIndexExists:
                 newIndex = "IDX_" + fieldToIndex
-
                 # UNIQUE setting is not used in FGDBs - comment out
                 arcpy.AddIndex_management(
-                    table,fieldToIndex,newIndex,"#","ASCENDING")
+                    table,fieldToIndex,newIndex,"#","ASCENDING"
+                )
 
                 if verbose:
                     arcpy.AddMessage(
                         "\tSuccessfully added attribute index for "
-                        f"{fieldToIndex}")
+                        f"{fieldToIndex}"
+                    )
 
     except arcpy.ExecuteError:
         func = sys._getframe().f_code.co_name
@@ -970,7 +900,7 @@ Does not return anything.
 
 # --- Main Body
 if __name__ == '__main__':
-    v = '2.2'
+    v = '2.3'
     arcpy.AddMessage(f'Version: {v}')
     env.parallelProcessingFactor = "85%"
     env.overwriteOutput = True
@@ -978,14 +908,11 @@ if __name__ == '__main__':
     # --- Input Arguments
     # Parameter 0: Regional selection
     region_opt = arcpy.GetParameterAsText(0)
-
     # Parameter 1: Input Directory where the new FGDB will be created.
     output_p = arcpy.GetParameterAsText(1)
-
     # Parameter 2: Input Directory where the 
     # original SDM spatial and tabular data exist.
     ssurgo_p = arcpy.GetParameterAsText(2)
-
     startTime = datetime.now()
 
     try:
@@ -1036,45 +963,31 @@ if __name__ == '__main__':
                 arcpy.AddError(f"Failed to append {feat[0]}")
                 arcpy.AddError(msg['error'])
                 exit()
-        # paramSet = [{'feat': feat} for feat in features[1:]]
-        # constSet = {'ssa_l': ssa_l, 'input_f': ssurgo_p, 'fd_p': fd_p}
-        # threadCount = 4
-        # for paramBack, output in concurrently(appendFeatures,
-        #                                      threadCount,
-        #                                      paramSet,
-        #                                      constSet):
-        #     try:
-        #         if 'surveys' in output:
-        #             arcpy.AddMessage(
-        #                 f"Successfully appended {paramBack['feat'][0]}")
-        #         else:
-        #             arcpy.AddError(f"Failed to append {paramBack['feat'][0]}")
-        #             arcpy.AddError(output['error'])
-        #             exit()
-        #     except GeneratorExit:
-        #         pass
 
-        # ---------------------------------------------------------------------------------------------------------- Setup Topology
-        # Validate Topology with a cluster of 0.1 meters
+        # Topology
         if createTopology(fd_p):
             arcpy.SetProgressorLabel("Validating Topology")
-            arcpy.ValidateTopology_management(os.path.join(fd_p,"FD_RTSD_Topology"))
+            arcpy.ValidateTopology_management(
+                os.path.join(fd_p,"FD_RTSD_Topology")
+            )
             arcpy.AddMessage("\tValidated Topology at 0.1 meters")
-
         else:
             arcpy.AddError(
-                "\n\tFailed to Create Topology. Create Topology Manually")
+                "\n\tFailed to Create Topology. Create Topology Manually"
+            )
 
         # --- Create Relationship class between project_record and SAPOLYGON
-        arcpy.SetProgressorLabel("Creating Relationship Class between "
-                                 "Project_Record & SAPOLYGON")
+        arcpy.SetProgressorLabel(
+            "Creating Relationship Class between Project_Record & SAPOLYGON"
+        )
         pr_p = f"{gdb_p}/ProjectRecord/Project_Record"
         sa_p = f"{fd_p}/SAPOLYGON"
         rel_n = "xProjectRecord_SAPOLYGON"
         env.workspace = gdb_p
         arcpy.CreateRelationshipClass_management(
             pr_p, sa_p, rel_n, "SIMPLE", "> SAPOLYGON", "< Project_Record",
-            "NONE", "ONE_TO_ONE", "NONE", "AREASYMBOL", "AREASYMBOL", "", "")
+            "NONE", "ONE_TO_ONE", "NONE", "AREASYMBOL", "AREASYMBOL", "", ""
+        )
         arcpy.AddMessage("\nSuccessfully Created Relationship Class")
 
         arcpy.SetProgressorLabel("Compacting " + RTSD_n)
@@ -1084,10 +997,12 @@ if __name__ == '__main__':
         # ---  Add Aliases to Spatial Features
         if updateAliasNames(region_opt, gdb_p):
             arcpy.AddMessage(
-                "\nSuccessfully updated Alias Names of the Spatial Features")
+                "\nSuccessfully updated Alias Names of the Spatial Features"
+            )
         else:
             arcpy.AddWarning(
-                "\nFailed to update Alias Names of the Spatial Features")
+                "\nFailed to update Alias Names of the Spatial Features"
+            )
 
         arcpy.AddMessage('***************************************************')
         # --- Enable Tracking
@@ -1095,11 +1010,13 @@ if __name__ == '__main__':
             fc_p = f"{fd_p}/{fc[0]}"
             arcpy.EnableEditorTracking_management(
                 fc_p, 'Creator', 'Creation_Date', 'Editor',
-                'Last_Edit_Date', 'ADD_FIELDS')
+                'Last_Edit_Date', 'ADD_FIELDS'
+            )
             count = int(arcpy.GetCount_management(fc_p)[0])
             arcpy.AddMessage(
                 f"Total number of {fc[0]} features: "
-                f"{count:,}")
+                f"{count:,}"
+            )
 
         endTime = datetime.now()
         arcpy.AddMessage("\nTotal Time: " + str(endTime - startTime))
