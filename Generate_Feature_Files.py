@@ -24,7 +24,7 @@ def errorMsg():
 
         tb = sys.exc_info()[2]
         tbinfo = traceback.format_tb(tb)[0]
-        theMsg = tbinfo + " \n" + str(sys.exc_type)+ ": " + str(sys.exc_value) + " \n"
+        theMsg = tbinfo + " \n" + str(sys.exc_info()[0])+ ": " + str(sys.exc_info()[1]) + " \n"
         arcMsg = "ArcPy ERRORS:\n" + arcpy.GetMessages(2) + "\n"
         PrintMsg(theMsg, 2)
         PrintMsg(arcMsg, 2)
