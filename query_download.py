@@ -186,13 +186,13 @@ def CheckExistingDataset(areaSym, surveyDate, newFolder, template_b):
     """
     try:
         # file count per SSRUGO version 2.3.3   
-        if template_b:
-            mainN = 6
-            mdbP = f"{newFolder}/soildb_US_2003.mdb"
-            mdb_b = os.path.isfile(mdbP)
-        else:
-            mainN = 5
-            mdb_b = True
+        #if template_b:
+        #    mainN = 6
+        #    mdbP = f"{newFolder}/soildb_US_2003.mdb"
+        #    mdb_b = os.path.isfile(mdbP)
+        #else:
+        mainN = 5
+        mdb_b = True
         spatN = 26
         tabN = 68
         spatF = os.path.join(newFolder, 'spatial')
@@ -452,8 +452,8 @@ def main(args):
         # ---- Parameters
         outputFolder = arcpy.GetParameterAsText(0)
         surveyList = arcpy.GetParameter(2)
-        template_b = arcpy.GetParameter(4)
-        overwrite_b = arcpy.GetParameter(5)
+        template_b = False # arcpy.GetParameter(4)
+        overwrite_b = arcpy.GetParameter(4)
         arcpy.AddMessage(f"{type(surveyList)}: {surveyList}")
 
         # ---- Setup
