@@ -104,7 +104,7 @@ from datetime import datetime
 from urllib.request import urlopen
 from importlib import reload
 import query_download
-reload(query_download)
+importlib.reload(query_download)
 
 
 def pyErr(func: str) -> str:
