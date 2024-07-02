@@ -117,7 +117,7 @@ def rdps(M, E=1):
                 fS.append(far)
             iS.sort()
             fS.sort()
-            dump = rdpi(M, E, dict(zip(iS, fS)))
+            dump = rdpi(M, E, dict(list(zip(iS, fS))))
             close[contigI] = dump[contigI]
         return M[close,]
     except:
@@ -332,7 +332,7 @@ def tweezer(arcs, inter, v0, MUpoly_, N, cutV, weakEggs ,min_angle, dec):
                 # vectors, there can only be one acute angle
                 back = np.argmin(angles[acuteI], axis=1)
                 # vector position of back vector
-                pos[range(nn), (back[:, 0])] = back
+                pos[list(range(nn)), (back[:, 0])] = back
                 i0 = np.where(back == 0)[0]
                 i1 = np.where(back == 1)[0]
                 i2 = np.where(back == 2)[0]
@@ -445,12 +445,12 @@ def Reassemble(iCur, arcs, polys, shapes, weakEggs, badEggs):
     pool = mp.Pool(pCores)
     ### Assemble Polygons
     try:
-        for FID, [ai, mu] in polys.items():
+        for FID, [ai, mu] in list(polys.items()):
             try:
                 # subset of arcs; a sub copy more efficient that searching
                 # entire arcs and they're sorted in ai order
                 # a0 is tuple of arc ID's; a1 tuple of the arc position in 'arcs'
-                a0, a1 = zip(*((i, (j-1)//-2) for i, j in ai))
+                a0, a1 = list(zip(*((i, (j-1)//-2) for i, j in ai)))
                 parcs = arcs[a0, :]
                 parcs2 = arcs[a0, a1]
 
