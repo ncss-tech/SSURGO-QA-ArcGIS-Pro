@@ -267,7 +267,7 @@ def ProcessLayer(inLayer, outputSR, minAngle, iSelection):
 
         # Create a copy of the dLines dictionary, sorted by angle
         # This dictionary will be used to create the output layers, smallest angles first
-        dAngles = OrderedDict(sorted(dTest.items(), key=lambda x: x[1]))
+        dAngles = OrderedDict(sorted(list(dTest.items()), key=lambda x: x[1]))
 
         # Create output line featureclass containing acute angles that were flagged
         #
