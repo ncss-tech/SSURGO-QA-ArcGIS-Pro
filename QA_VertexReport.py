@@ -740,7 +740,7 @@ def MakeStatsTable(inField, unitAbbrev):
     try:
         thePrefix = "QA_VertexReport"
 
-        if env.workspace.endswith(".gdb") or env.workspace.endswith(".mdb"):
+        if env.workspace.endswith(".gdb"): # or env.workspace.endswith(".mdb"):
             theExtension = ""
             statsTbl = os.path.join(env.workspace, thePrefix + theExtension)
 
