@@ -426,7 +426,7 @@ def importTabularData(tabularFolder, tblAliases, queue):
         # Loops through the keys in the tblAliases dict() and puts the 2nd value
         # (iefilename) and key (tabphyname) in a list.  The list is then sorted
         # so that SSURGO text files can be imported in alphabetical sequence.
-        GDBTables = tblAliases.keys()
+        GDBTables = list(tblAliases.keys())
         #GDBTables.sort()
 
         # Do not import the following SSURGO text files.  Most are metadata text files that are
