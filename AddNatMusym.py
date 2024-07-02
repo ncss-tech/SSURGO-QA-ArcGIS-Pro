@@ -539,7 +539,7 @@ import arcpy
 import traceback
 import json
 import socket
-import urllib
+import urllib.request, urllib.parse, urllib.error
 from urllib.request import Request, urlopen, URLError, HTTPError
 from arcpy import env
 
