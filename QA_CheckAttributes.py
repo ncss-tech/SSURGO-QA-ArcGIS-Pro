@@ -296,7 +296,7 @@ def checkSSURGOAttributesFormat(inLayer, inFields):
         bFldValueErrors = False
 
 ## ===================================================================================
-import sys, os, traceback, collections, arcpy, json, urllib
+import sys, os, traceback, collections, arcpy, json, urllib.request, urllib.parse, urllib.error
 from urllib.request import urlopen, URLError, HTTPError
 from arcpy import env
 

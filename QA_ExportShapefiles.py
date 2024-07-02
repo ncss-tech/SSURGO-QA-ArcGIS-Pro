@@ -240,7 +240,7 @@ def GetExportLayers(inLoc):
                         pass
 
             # Check each SSURGO dataType in dictionary to make sure that there are no duplicates or omissisions
-            for lyr, iCnt in dCount.items():
+            for lyr, iCnt in list(dCount.items()):
 
                 # SSURGO layer is missing
                 if int(iCnt) == 0:

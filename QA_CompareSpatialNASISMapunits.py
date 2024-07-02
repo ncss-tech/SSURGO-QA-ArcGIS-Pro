@@ -322,7 +322,7 @@ def Number_Format(num, places=0, bCommas=True):
 
 ## ====================================== Main Body ==================================
 # Import modules
-import sys, string, os, locale, arcpy, traceback,  collections, urllib
+import sys, string, os, locale, arcpy, traceback,  collections, urllib.request, urllib.parse, urllib.error
 from urllib.request import Request, urlopen, URLError, HTTPError
 from arcpy import env
 

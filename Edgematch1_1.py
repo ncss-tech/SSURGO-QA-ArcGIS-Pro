@@ -98,7 +98,7 @@ def BNodes2(MU, nodes, areas):
         #     arcpy.AddMessage(res.get())
         if nodes and boundDict:
             nodePot = tuple(PG(Point(x, y)) 
-                             for nodeL in boundDict.values() 
+                             for nodeL in list(boundDict.values())
                              for x, y in nodeL)
             arcpy.CopyFeatures_management(nodePot, nodes)
         
@@ -320,7 +320,7 @@ try:
     # (a | b | c) - ((a & b) | (a & c) | (b & c))
     exclusive = set()
     inclusive = set()
-    inclusive = inclusive.union(*setDict.values())
+    inclusive = inclusive.union(*list(setDict.values()))
     
     for aSet, bSet in neighSet:
         exclusive.update(setDict[aSet] & setDict[bSet])

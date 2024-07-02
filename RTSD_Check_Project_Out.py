@@ -140,7 +140,7 @@ def getNasisMukeys(theURL, theProject, ssurgoMUpoly):
         theURL = theURL + '&p1='  + theProject.replace(" ","%20") # + "*"
 
         # Open a network object using the URL with the search string already concatenated
-        theReport = urllib.urlopen(theURL)
+        theReport = urllib.request.urlopen(theURL)
 
         bValidRecord = False # boolean that marks the starting point of the mapunits listed in the project
         mukeyField = FindField(ssurgoMUpoly, "MUKEY")
