@@ -301,12 +301,12 @@ def ProcessLayer(inLayer, outputSR, minAngle, iSelection):
 
             # create new featurelayer from sliver polylines
             layerPath = os.path.dirname(sys.argv[0])
-            layerFile1 = os.path.join(layerPath,"Yellow_Line.lyr")
+            # layerFile1 = os.path.join(layerPath,"Yellow_Line.lyrx")
             #outLayerName = "QA Slivers (" + splitThousands(minAngle) + chr(176).decode(locale.getpreferredencoding()) + " angle)"
             outLayerName = "QA Slivers (" + splitThousands(minAngle) + chr(176) + " angle)"
 
             arcpy.MakeFeatureLayer_management(outLayer, outLayerName)
-            arcpy.ApplySymbologyFromLayer_management (outLayerName, layerFile1)
+            # arcpy.ApplySymbologyFromLayer_management (outLayerName, layerFile1)
             arcpy.SetParameter(3, outLayerName)
             AddMsgAndPrint(" \n ", 0)
 
@@ -326,11 +326,11 @@ def ProcessLayer(inLayer, outputSR, minAngle, iSelection):
 
             # create new featurelayer from sliver vertices
             layerPath = os.path.dirname(sys.argv[0])
-            layerFile2 = os.path.join(layerPath,"Red_SliverVertex.lyr")
+            # layerFile2 = os.path.join(layerPath,"Red_SliverVertex.lyrx")
             outLayerName2 = "QA Sliver Vertex (" + splitThousands(minAngle) + chr(176) + " angle)"
             #outLayerName2 = "QA Sliver Vertex (" + splitThousands(minAngle) + chr(176).decode(locale.getpreferredencoding()) + " angle)"
             arcpy.MakeFeatureLayer_management(outLayer2, outLayerName2)
-            arcpy.ApplySymbologyFromLayer_management (outLayerName2, layerFile2)
+            # arcpy.ApplySymbologyFromLayer_management (outLayerName2, layerFile2)
             arcpy.SetParameter(4, outLayerName2)
 
             # add new line layer to top of TOC
@@ -341,11 +341,11 @@ def ProcessLayer(inLayer, outputSR, minAngle, iSelection):
             # access to the properties.
             try:
                 # if this is ArcCatalog, this next line will cause failure and drop past this next section
-                mxd = arcpy.mapping.MapDocument("CURRENT")
-                df = arcpy.mapping.ListDataFrames(mxd, "*")[0]
-                mLayer1 = arcpy.mapping.Layer(outLayerName)
-                arcpy.mapping.AddLayer(df, mLayer1, "TOP")
-                mLayers = arcpy.mapping.ListLayers(mxd)
+                mxd = arcpy.mp.MapDocument("CURRENT")
+                df = arcpy.mp.ListDataFrames(mxd, "*")[0]
+                mLayer1 = arcpy.mp.Layer(outLayerName)
+                arcpy.mp.AddLayer(df, mLayer1, "TOP")
+                mLayers = arcpy.mp.ListLayers(mxd)
 
                 for mLayer1 in mLayers:
                     if mLayer1.name == outLayerName:
@@ -353,9 +353,9 @@ def ProcessLayer(inLayer, outputSR, minAngle, iSelection):
                         break
 
                 arcpy.env.addOutputsToMap = True
-                mLayer2 = arcpy.mapping.Layer(outLayerName2)
-                arcpy.mapping.AddLayer(df, mLayer2, "TOP")
-                mLayers = arcpy.mapping.ListLayers(mxd)
+                mLayer2 = arcpy.mp.Layer(outLayerName2)
+                arcpy.mp.AddLayer(df, mLayer2, "TOP")
+                mLayers = arcpy.mp.ListLayers(mxd)
 
                 for mLayer2 in mLayers:
                     if mLayer2.name == outLayerName2:
