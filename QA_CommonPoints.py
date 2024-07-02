@@ -484,14 +484,14 @@ if __name__ == '__main__':
 
             # Add QA Common Points to ArcGIS Pro Session
             scriptPath = os.path.dirname(__file__)
-            lyrxFile = os.path.join(scriptPath,"QA_Common_Points_GreenDot.lyrx")
+            # lyrxFile = os.path.join(scriptPath,"QA_Common_Points_GreenDot.lyrx")
 
             if fld2Name != "":
                 outLayerName = "QA Common Points (" + fld2NameU.title() + ":" + fld1NameU.title() + ")"
             else:
                 outLayerName = "QA Common Points (" + fld1NameU.title() + ")"
 
-            AddLayerToArcGISPro(outLayer,lyrxFile,outLayerName)
+            # AddLayerToArcGISPro(outLayer,lyrxFile,outLayerName)
 
         else:
             AddMsgAndPrint(f".\nNo common-point issues found with '{inLayer}'\n ")
