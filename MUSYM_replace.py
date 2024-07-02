@@ -39,8 +39,8 @@ try:
             for AS, muI, muR in sCur: #csvR:
                 # complete entry and list for area already started
                 AS = AS.strip()
-                muI = muI.strip()
-                muR = muR.strip()
+                muI = str(muI).strip()
+                muR = str(muR).strip()
                 if (AS and muI and muR) and (AS in MUdict):
                     if not muI in MUdict[AS]:
                         MUdict[AS][muI] = muR
@@ -66,8 +66,8 @@ try:
         else:
             for AS, muI, muR, An in sCur: #csvR:
                 AS = AS.strip()
-                muI = muI.strip()
-                muR = muR.strip()
+                muI = str(muI).strip()
+                muR = str(muR).strip()
                 muI_ = muI + str(An)
                 # complete entry and list for area already started
                 if (AS and muI and muR) and (AS in MUdict):
