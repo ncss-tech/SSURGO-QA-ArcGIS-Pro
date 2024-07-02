@@ -260,7 +260,7 @@ def ProcessLayer(inLayer, outputSR, outLayer, minDist, iSelection):
 
                 # for each value that has a reported common-point, get the list of coordinates from
                 # the dDups dictionary and write to the output Common_Points featureclass
-                for fid in dPoints.keys():
+                for fid in list(dPoints.keys()):
                     pnts = dPoints[fid]
 
                     for pnt in pnts:
