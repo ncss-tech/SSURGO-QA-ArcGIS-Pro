@@ -277,11 +277,12 @@ def ProcessLayer(inLayer, outputSR, outLayer, minDist, iSelection):
 
             # create new featurelayer from vertex flag points
             layerPath = os.path.dirname(sys.argv[0])
-            layerFile = os.path.join(layerPath,"RedDot.lyrx")
+            AddMsgAndPrint(layerPath)
+            # layerFile = os.path.join(layerPath, "RedDot.lyr")
             outLayerName = "QA Vertex Flag Points (" + str(minDist) + " " + unitAbbrev + ")"
             arcpy.MakeFeatureLayer_management(outLayer, outLayerName)
             arcpy.env.addOutputsToMap = True
-            arcpy.ApplySymbologyFromLayer_management (outLayerName, layerFile)
+            # arcpy.ApplySymbologyFromLayer_management (outLayerName, layerFile)
             arcpy.SetParameter(3, outLayerName)
             arcpy.ResetProgressor()
 
@@ -366,7 +367,7 @@ def MakeStatsTable(unitAbbrev):
     try:
         thePrefix = "QA_VertexStats"
 
-        if env.workspace.endswith(".gdb") or env.workspace.endswith(".mdb"):
+        if env.workspace.endswith(".gdb"): # or env.workspace.endswith(".mdb"):
             theExtension = ""
 
         else:
