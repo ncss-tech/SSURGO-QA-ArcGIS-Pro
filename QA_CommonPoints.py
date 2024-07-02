@@ -434,7 +434,7 @@ if __name__ == '__main__':
                                 bRing = True  # prevents island from-node from being identified as a duplicate of the to-node
 
                 # get duplicate coordinate pairs within the list of vertices for the current attribute value
-                dupList = [x for x, y in collections.Counter(pntList).items() if y > 1]
+                dupList = [x for x, y in list(collections.Counter(pntList).items()) if y > 1]
 
                 if len(dupList) > 0:
                     # if duplicate vertices are found in this polygon, add the list to the dictionary.
@@ -473,7 +473,7 @@ if __name__ == '__main__':
             with arcpy.da.InsertCursor(outLayer, ["SHAPE@XY", newFld1]) as cursor:
                 # for each value that has a reported common-point, get the list of coordinates from
                 # the dDups dictionary and write to the output Common_Points featureclass
-                for val in dDups.keys():
+                for val in list(dDups.keys()):
 
                     for coords in dDups[val]:
                         cursor.insertRow([coords, val]) # write both geometry and the single attribute value to the output layer
