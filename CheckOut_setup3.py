@@ -191,7 +191,7 @@ try:
                 legends[row[0]].add((row[1], tuple(row[2:])))
             else:
                 legends[row[0]] = {(row[1], tuple(row[2:]))}
-        for A in legends.keys():
+        for A in list(legends.keys()):
             legends[A] =  dict(legends[A])
         fields = ['AREASYMBOL', 'MUSYM', 'MUNAME', 'NATMUSYM', 'MUKEY']
         with arcpy.da.UpdateCursor(ltsd_mu_p, fields) as uCur:
