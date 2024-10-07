@@ -13,10 +13,14 @@ Created on: 04/19/2023
     @organization: National Soil Survey Center, USDA-NRCS
     @email: alexander.stum@usda.gov
 
-@modified 11/03/2023
+@modified 10/07/2024
     @by: Alexnder Stum
-@version: 0.5
+@version: 0.6
 
+# ---
+Updated 10/07/2024
+- Changed main structure so it can be called by other modules
+- Set max threads to 6
 """
 
 
@@ -446,14 +450,14 @@ def ProcessSurvey(outputFolder, areaSym, surveyInfo, template_b, overwrite_b):
   
 def main(args):
     try:
-        v = 0.5
+        v = 0.6
         arcpy.AddMessage(f"version {v}")
 
         # ---- Parameters
-        outputFolder = arcpy.GetParameterAsText(0)
-        surveyList = arcpy.GetParameter(2)
-        template_b = arcpy.GetParameter(4)
-        overwrite_b = arcpy.GetParameter(5)
+        outputFolder = args[0]
+        surveyList = args[1]
+        template_b = args[2]
+        overwrite_b = args[3]
         arcpy.AddMessage(f"{type(surveyList)}: {surveyList}")
 
         # ---- Setup
@@ -470,7 +474,7 @@ def main(args):
         
         # %%% By Area Symbol
         surveyCount = len(paramSet)
-        threadCount = min(mp.cpu_count(), surveyCount)
+        threadCount = min(mp.cpu_count(), surveyCount, 6)
         arcpy.AddMessage(f"\tRunning on {threadCount} threads.\n")
         successCount = 0
         failList = []
@@ -522,4 +526,8 @@ def main(args):
 
 # %% Main
 if __name__ == '__main__':
-    main(sys.argv[1:])
+    outputFolder = arcpy.GetParameterAsText(0)
+    surveyList = arcpy.GetParameter(2)
+    template_b = arcpy.GetParameter(4)
+    overwrite_b = arcpy.GetParameter(5)
+    main([outputFolder, surveyList, template_b, overwrite_b])
