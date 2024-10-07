@@ -14,7 +14,12 @@ Created on: 1/16/2014
 
 @modified 11/13/2023
     @by: Alexnder Stum
-@version: 2.3
+@version: 2.3.1
+
+# ---
+Updated 05/11/2024
+- Updated Soil Survey Regional Office NASIS Site Names from 13 to 7:
+Variable region_d 
 
 # ---
 Updated 11/13/2023 - Alexander Stum
@@ -254,11 +259,12 @@ def getSSARegionList(ssurgo_p: str, region_opt: str) -> list[str]:
             region_sub = None
         # New regional: legacy region it was collasced to
         region_d = {
-            'Alaska': 'MLRA13_Wasilla', 'Northeast': 'MLRA12_Amherst',
-            'Northwest': 'MLRA04_Bozeman', 'North Central': 'MLRA10_StPaul',
-            'Southeast': 'MLRA03_Raleigh', 'Southwest': 'MLRA02_Davis',
-            'South Central': 'MLRA09_Temple'
-            }
+            'Alaska': 'SSRO_Alaska', 'Northeast': 'SSRO_Northeast',
+            'Northwest': 'SSRO_Northwest',
+            'North Central': 'SSRO_North_Central',
+            'Southeast': 'SSRO_Southeast', 'Southwest': 'SSRO_Southwest',
+            'South Central': 'SSRO_South_Central'
+        }
         # Lims report that provides official legend ownership
         url = ('https://nasis.sc.egov.usda.gov/NasisReportsWebSite/'
         'limsreport.aspx?report_name=WEB-Official%20Non-MLRA%20SSA')
@@ -900,7 +906,7 @@ Does not return anything.
 
 # --- Main Body
 if __name__ == '__main__':
-    v = '2.3'
+    v = '2.3.1'
     arcpy.AddMessage(f'Version: {v}')
     env.parallelProcessingFactor = "85%"
     env.overwriteOutput = True

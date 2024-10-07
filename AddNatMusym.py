@@ -505,7 +505,7 @@ def getNATMUSYM(listsOfValues, featureLayer):
                     arcpy.SetProgressorPosition()
 
                 except:
-                    arcpy.addError("\tInvalid MUKEY: " + mukey)
+                    arcpy.AddError("\tInvalid MUKEY: " + mukey)
                     continue
 
         arcpy.ResetProgressor()

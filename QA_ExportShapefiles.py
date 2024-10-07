@@ -44,6 +44,13 @@
 # Modified to work with Regional Spatial Geodatabase
 # Requires all 6 SSURGO feature classes to be present within a Feature dataset.
 
+# v 1.1 (aks)
+    # 1) Cleaned up refernces to input featur class by hardening path so 
+        # the tool will no longer will pull in arbitrary MUPOLYGON features
+        # from map legend.
+    # 2) Replaced FeatureClassToFeatureClass with ExportFeatures
+    # 3) added arcpyErr and pyErr functions, but didn't replace references
+        # of AddMsgAndPrint
 # ===============================================================================================================
 def AddMsgAndPrint(msg, severity=0):
     # prints message to screen if run as a python script
@@ -72,6 +79,32 @@ def AddMsgAndPrint(msg, severity=0):
     except:
         pass
 
+
+def arcpyErr(func):
+    try:
+        etype, exc, tb = sys.exc_info()
+        line = tb.tb_lineno
+        msgs = (
+            f"ArcPy ERRORS:\nIn function: {func} on line: "
+            f"{line}\n{arcpy.GetMessages(2)}\n"
+        )
+        return msgs
+    except:
+        return "Error in arcpyErr method"
+
+
+def pyErr(func):
+    try:
+        etype, exc, tb = sys.exc_info()
+      
+        tbinfo = traceback.format_tb(tb)[0]
+        msgs = (
+            "PYTHON ERRORS:\nTraceback info:\nIn function: "
+            f"{func}\n{tbinfo}\nError Info:\n{exc}"
+        )
+        return msgs
+    except:
+        return "Error in pyErr method"
 # ================================================================================================================
 def errorMsg():
     try:
@@ -225,7 +258,7 @@ def GetExportLayers(inLoc):
                 if fc[0:3] != "QA_":
 
                     # Get SSURGO data type and fileName ('_a.shp, _b.shp, _l.shp...) fileName is not used here.
-                    ssurgoType, fileName = GetFCType(fc, "")
+                    ssurgoType, fileName = GetFCType(f"{inLoc}/{fc}", "")
 
                     if ssurgoType in dCount:
 
@@ -282,7 +315,7 @@ def GetExportLayers(inLoc):
         return list()
 
 ## ===================================================================================
-def GetFCType(fc, theAS):
+def GetFCType(fc_path, theAS):
 
     # Determine SSURGO layer name using featuretype and table fields
     # Return string identifying SSURGO data type and shapefilename prefix
@@ -294,21 +327,19 @@ def GetFCType(fc, theAS):
         featureType = ""
         ssurgoType = ""
         fileName = ""
-
+        fc_name = os.path.basename(fc_path)
         # 2nd measure to exclude layers that begin with "QA_"
-        if fc[0:3] != "QA_":
-
-            fcName = os.path.basename(fc)
-            theDescription = arcpy.da.Describe(fc)
+        if fc_name[0:3] != "QA_":
+            theDescription = arcpy.da.Describe(fc_path)
             featType = theDescription['shapeType']
 
             # Look for AREASYMBOL field, must be present
-            if not FindField(fc, "AREASYMBOL"):
-                AddMsgAndPrint("\t" + fcName + " is missing 'AREASYMBOL' field (GetFCName)", 2)
+            if not FindField(fc_path, "AREASYMBOL"):
+                AddMsgAndPrint("\t" + fc_name + " is missing 'AREASYMBOL' field (GetFCName)", 2)
                 return ssurgoType, fileName
 
          # Look for MUSYM field
-        if FindField(fc, "MUSYM"):
+        if FindField(fc_path, "MUSYM"):
 
             hasMusym = True
 
@@ -332,14 +363,14 @@ def GetFCType(fc, theAS):
 
             # fc has MUSYM but not valid SSURGO layer
             else:
-                printMsg("\t" + fcName + " is an unidentified " + featType + " featureclass with an MUSYM field (GetFCName)",2)
+                AddMsgAndPrint("\t" + fc_name + " is an unidentified " + featType + " featureclass with an MUSYM field (GetFCName)",2)
                 return ssurgoType, fileName
 
         else:
             hasMusym = False
 
         # Look for FEATSYM field
-        if FindField(fc, "FEATSYM"):
+        if FindField(fc_path, "FEATSYM"):
 
             hasFeatsym = True
 
@@ -357,7 +388,7 @@ def GetFCType(fc, theAS):
 
             # fc has featsym but not valid SSURGO layer
             else:
-                printMsg("\t" + fcName + " is an unidentified " + featType + " featureclass with an FEATSYM field (GetFCName)",2)
+                AddMsgAndPrint("\t" + fc_name + " is an unidentified " + featType + " featureclass with an FEATSYM field (GetFCName)",2)
                 return ssurgoType, fileName
 
         else:
@@ -374,7 +405,7 @@ def GetFCType(fc, theAS):
                 return ssurgoType, fileName
 
             else:
-                AddMsgAndPrint("\t" + fcName + " is an unidentified " + featType + " featureclass with no MUSYM or FEATSYM field (GetFCName)", 2)
+                AddMsgAndPrint("\t" + fc_name + " is an unidentified " + featType + " featureclass with no MUSYM or FEATSYM field (GetFCName)", 2)
                 return ssurgoType, fileName
 
     except:
@@ -382,7 +413,7 @@ def GetFCType(fc, theAS):
         return "", ""
 
 ## ===================================================================================
-def FindField(fc, fldName):
+def FindField(fc_path, fldName):
     # Look for specified attribute field (fldName) in target featureclass (fc)
     # return True if attribute field was found
     # return False if attribute field was not found
@@ -390,7 +421,7 @@ def FindField(fc, fldName):
     try:
 
         bFound = False
-        desc = arcpy.da.Describe(fc)
+        desc = arcpy.da.Describe(fc_path)
         fldList = desc['fields']
 
         for fld in fldList:
@@ -407,7 +438,7 @@ def FindField(fc, fldName):
         return False
 
 ## ===================================================================================
-def CheckAttributes(fc, ssurgoType):
+def CheckAttributes(fc_path, ssurgoType):
 
     # check to make sure the primary attribute fields are populated
     # with data and no NULL records exist.
@@ -429,21 +460,21 @@ def CheckAttributes(fc, ssurgoType):
             fldName = "AREASYMBOL"
 
         # if fc has features, check for NULLS or spaces
-        if int(arcpy.GetCount_management(fc).getOutput(0)) > 0:
+        if int(arcpy.GetCount_management(fc_path).getOutput(0)) > 0:
 
             # Adds field delimiters to a field name to use in SQL queries
-            qFld = arcpy.AddFieldDelimiters(fc, fldName)
+            qFld = arcpy.AddFieldDelimiters(fc_path, fldName)
 
             # query to filter blank or NULL values
             sQuery = qFld + " IS NULL OR TRIM(LEADING ' ' FROM " + qFld + ") = '' OR " + qFld + " LIKE '% %'"
 
             # return a list of OIDs for features that are blank/NULL
             fields = ["OID@"]
-            values = [row[0] for row in arcpy.da.SearchCursor(fc, (fields), sQuery)]
+            values = [row[0] for row in arcpy.da.SearchCursor(fc_path, (fields), sQuery)]
 
             # Report any blank values
             if len(values) > 0:
-                AddMsgAndPrint("\tMissing " + str(len(values)) + " " + fldName + " value(s) in " + os.path.basename(fc) + " layer:",2)
+                AddMsgAndPrint("\tMissing " + str(len(values)) + " " + fldName + " value(s) in " + os.path.basename(fc_path) + " layer:",2)
 
                 for value in values:
                     AddMsgAndPrint("\t\tObjectID: {0}".format(value),2)
@@ -520,7 +551,7 @@ def Number_Format(num, places=0, bCommas=True):
         return num
 
 ## ===================================================================================
-def SetOutputCoordinateSystem(inLayer):
+def SetOutputCoordinateSystem(fc_path):
     # This function will compare the geographic coord sys of the inLayer to
     # the spatial reference 4326 (GCS_WGS_1984).  If they are different then
     # an ESRI datum transformation method will be applied based on the geographic
@@ -539,11 +570,10 @@ def SetOutputCoordinateSystem(inLayer):
         # Create the GCS WGS84 spatial reference using the factory code
         outputSR = arcpy.SpatialReference(4326)
 
-        # Get the desired output geographic coordinate system name (GCS_WGS_1984)
+        # Name of geographic coordinate system GCS_WGS_1984
         outputGCS = outputSR.GCS.name
-
-        # Describe the input layer and get the input layer's spatial reference, other properties
-        desc = arcpy.da.Describe(inLayer)
+        # input spatial reference
+        desc = arcpy.da.Describe(fc_path)
         dType = desc['dataType']
         sr = desc['spatialReference']
         srType = sr.type.upper()
@@ -563,11 +593,11 @@ def SetOutputCoordinateSystem(inLayer):
         # input and output geographic coordinate systems are the same
         # no datum transformation method required
         if outputGCS == inputGCS:
-            AddMsgAndPrint("\nNo datum transformation required", 1)
+            AddMsgAndPrint("\nNo datum transformation required")
             #tm = ""
 
         else:
-            AddMsgAndPrint("\tUsing datum transformation method 'WGS_1984_(ITRF00)_To_NAD_1983' \n ", 1)
+            AddMsgAndPrint("\tUsing datum transformation method 'WGS_1984_(ITRF00)_To_NAD_1983' \n ")
 
         """   COMMENTED THIS OUT AND HARD CODED THE TRANSFORMATION TO ITRF00 """
 ##
@@ -605,12 +635,17 @@ def SetOutputCoordinateSystem(inLayer):
 
         return True
 
+    except arcpy.ExecuteError:
+        func = sys._getframe(  ).f_code.co_name
+        arcpy.AddError(arcpyErr(func))
+        return False
     except:
-        errorMsg()
+        func = sys._getframe(  ).f_code.co_name
+        arcpy.AddError(pyErr(func))
         return False
 
 ## ===================================================================================
-def GetFieldInfo(fc, ssurgoType, oldFields):
+def GetFieldInfo(fc_path, ssurgoType, oldFields):
 
     # Create and return FieldMapping object containing valid SSURGO fields. Fields
     # that are not part of SSURGO will not be included.
@@ -632,7 +667,7 @@ def GetFieldInfo(fc, ssurgoType, oldFields):
         # Create required FieldMappings object and add the fc table as a
         # FieldMap object
         fms = arcpy.FieldMappings()
-        fms.addTable(fc)
+        fms.addTable(fc_path)
 
         # loop through each field in FieldMappings object
         for fm in fms.fieldMappings:
@@ -687,7 +722,7 @@ def CheckFieldInfo(outFC, ssurgoSchema):
         return False
 
 ## ===================================================================================
-def CreateSSA(fc,loc,AS):
+def CreateSSA(fc_out,loc,AS):
 
     # Create Survey Area Boundary by dissolving Mapunit Polygon layer.
     # Returns False if no features were generated after the dissolve or if
@@ -696,14 +731,16 @@ def CreateSSA(fc,loc,AS):
     try:
 
         # path to the Soil Survey Area boundary shapefile export
-        SSApath = os.path.join(loc,AS.lower() + "_b.shp")
+        SSApath = os.path.join(loc, AS.lower() + "_b.shp")
 
         # return false if shapefile already exists
         if env.overwriteOutput == False and arcpy.Exists(SSApath):
             AddMsgAndPrint("Output shapefile (" + os.path.basename(SSApath) + ") already exists", 2)
             return False
 
-        arcpy.Dissolve_management(fc,SSApath,"AREASYMBOL", "", "SINGLE_PART")
+        arcpy.Dissolve_management(
+            fc_out, SSApath, "AREASYMBOL", "", "SINGLE_PART"
+        )
 
         # Notify user of the amount of SSA features exported
         ssaCnt = int(arcpy.GetCount_management(SSApath).getOutput(0))
@@ -811,11 +848,11 @@ def ProcessSurveyArea(inLoc, exportList, outLoc, theAS, ssurgoFields, msg):
             arcpy.SetProgressorLabel("\nExporting Soil Survey: " + theAS + " " + str(msg))
 
             layerCount += 1
-
+            fc_path = f"{inLoc}/{fc}"
             # Get SSURGO data type ('Mapunit Polygon') and fileName ('wi025_a.shp)
-            ssurgoType, fileName = GetFCType(fc, theAS.lower())
+            ssurgoType, fileName = GetFCType(fc_path, theAS.lower())
 
-            oldFields = arcpy.Describe(fc).fields
+            oldFields = arcpy.Describe(fc_path).fields
 
             # ++++++++++++++++++++++++++
             # Do not export the SSA from the fc layer. The SSA boundary
@@ -826,7 +863,7 @@ def ProcessSurveyArea(inLoc, exportList, outLoc, theAS, ssurgoFields, msg):
                 continue
 
             # evaluate and return only valid SSURGO fields
-            fldInfo = GetFieldInfo(fc, ssurgoType, oldFields)
+            fldInfo = GetFieldInfo(fc_path, ssurgoType, oldFields)
 
             # process if more than 1 field was returned
             if fldInfo.fieldCount > 0:
@@ -840,7 +877,12 @@ def ProcessSurveyArea(inLoc, exportList, outLoc, theAS, ssurgoFields, msg):
                     return False
 
                 # Convert areasymbol selection to a shapefile
-                arcpy.FeatureClassToFeatureClass_conversion (fc, surveyLoc, fileName, sQuery, fldInfo)
+                arcpy.conversion.ExportFeatures(
+                    fc_path,
+                    f"{surveyLoc}/{fileName}",
+                    sQuery,
+                    field_mapping=fldInfo
+                )
 
                 # Failed to export shapefile
                 if not arcpy.Exists(outFC):
@@ -853,13 +895,13 @@ def ProcessSurveyArea(inLoc, exportList, outLoc, theAS, ssurgoFields, msg):
 
                     # Check output shapefile schema
                     if not CheckFieldInfo(outFC, ssurgoFields[ssurgoType]):
-                        arcpy.Delete_management(surveyLoc)
+                        # arcpy.Delete_management(surveyLoc)
                         return False
 
 
                     # Check primary attribute field for missing values
                     if not CheckAttributes(outFC, ssurgoType):
-                        arcpy.Delete_management(surveyLoc)
+                        # arcpy.Delete_management(surveyLoc)
                         return False
 
                     # Tally and gather unique special feature points and line
@@ -884,7 +926,7 @@ def ProcessSurveyArea(inLoc, exportList, outLoc, theAS, ssurgoFields, msg):
 
                 # Create survey boundary if _a layer by dissolving it
                 if ssurgoType == "Map unit polygons" and not CreateSSA(outFC,surveyLoc,theAS):
-                    arcpy.Delete_management(surveyLoc)
+                    # arcpy.Delete_management(surveyLoc)
                     return False
 
                 # strictly formatting
@@ -938,7 +980,8 @@ from arcpy import env
 if __name__ == '__main__':
 
     try:
-
+        v = '1.1'
+        arcpy.AddMessage(f"version: {v}")
         # 4 Script arguments...
         inLoc = arcpy.GetParameterAsText(0)         # input workspace or featuredataset
         outLoc = arcpy.GetParameterAsText(1)        # output folder where shapefiles will be placed
@@ -968,8 +1011,9 @@ if __name__ == '__main__':
 
         # Make sure each valid SSURGO fc has AREASYMBOL fully populated; MUSYM/FEATSYM is checked after
         # the data has been exported.  If nulls occur there, the entire survey is deleted.
-        for fc in exportList:
-            if not CheckAttributes(fc,"Survey area polygons"):
+        for fc_name in exportList:
+            fc_path = f"{inLoc}/{fc_name}"
+            if not CheckAttributes(fc_path,"Survey area polygons"):
                 AddMsgAndPrint("Halting export process",2)
                 exit()
 
@@ -992,12 +1036,12 @@ if __name__ == '__main__':
         # set output coordinate system env variable to (4326 - WGS84)
 
         bSR = False
-        for fc in exportList:
-            ssurgoType, fileName = GetFCType(fc, "")
-
+        for fc_name in exportList:
+            fc_path = f"{inLoc}/{fc_name}"
+            ssurgoType, fileName = GetFCType(fc_path, "")
             if ssurgoType == "Map unit polygons":
 
-                bSR = SetOutputCoordinateSystem(fc)
+                bSR = SetOutputCoordinateSystem(fc_path)
                 break
 
         # Either Mapunit Polygon was not found or not able to set spatial reference
