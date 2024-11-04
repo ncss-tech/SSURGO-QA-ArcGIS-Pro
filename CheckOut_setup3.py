@@ -10,10 +10,13 @@ Created on: 10/12/2018
     @organization: National Soil Survey Center, USDA-NRCS
     @email: alexander.stum@usda.gov
 
-@modified 11/07/2023
+@modified 11/04/2024
     @by: Alexnder Stum
-@version: 3.1
+@version: 3.2
 
+# ---
+3.1 Updated 11/04/2024 - Alexander Stum
+- Added 'ADD_Fields' parameter to EnableEditorTracking funciton call
 # ---
 3.1 Updated 11/07/2023 - Alexander Stum
 - Lumped the first two input string parameters into a single Local Workspace
@@ -27,7 +30,6 @@ Added MUNAME field and modified MUSYM values to be themselves
 
 """
 
-from importlib.util import find_spec
 import os
 import arcpy
 import sys
@@ -39,7 +41,7 @@ import winsound
 
 
 try:
-    v = '3.1'
+    v = '3.2'
     gdb_p = arcpy.GetParameterAsText(0)
     gdb_n = os.path.basename(gdb_p)
     path = os.path.dirname(gdb_p)
@@ -278,7 +280,8 @@ try:
     #Enable Editor Tracking (under Fields)
     arcpy.AddMessage('Setting up Edit Tracking')
     arcpy.EnableEditorTracking_management(
-        ltsd_mu_p, 'Creator', 'Creation_Date', 'Editor', 'Last_Edit_Date'
+        ltsd_mu_p, 'Creator', 'Creation_Date', 'Editor', 'Last_Edit_Date', 
+        'ADD_FIELDS'
     )
     arcpy.EnableEditorTracking_management(
         ltsd_sa_p, 'Creator', 'Creation_Date', 'Editor', 'Last_Edit_Date',
