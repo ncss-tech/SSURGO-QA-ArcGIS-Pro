@@ -14,7 +14,11 @@ Created on: 1/16/2014
 
 @modified 11/13/2023
     @by: Alexnder Stum
-@version: 2.3.1
+@version: 2.3.2
+
+# ---
+Updated 11/20/2024
+- Fixed handling of CONUS option
 
 # ---
 Updated 05/11/2024
@@ -257,13 +261,13 @@ def getSSARegionList(ssurgo_p: str, region_opt: str) -> list[str]:
         else:
             region = region_opt
             region_sub = None
-        # New regional: legacy region it was collasced to
+        # Regional names and NASIS site names
         region_d = {
             'Alaska': 'SSRO_Alaska', 'Northeast': 'SSRO_Northeast',
             'Northwest': 'SSRO_Northwest',
             'North Central': 'SSRO_North_Central',
             'Southeast': 'SSRO_Southeast', 'Southwest': 'SSRO_Southwest',
-            'South Central': 'SSRO_South_Central'
+            'South Central': 'SSRO_South_Central', 'CONUS': 'CONUS'
         }
         # Lims report that provides official legend ownership
         url = ('https://nasis.sc.egov.usda.gov/NasisReportsWebSite/'
@@ -273,9 +277,19 @@ def getSSARegionList(ssurgo_p: str, region_opt: str) -> list[str]:
         df = pd.read_html(html)[0]
         # NASIS Sites
         region_s = set(df['NASIS Site Name'])
-        # Get current Region key
-        region_n = region_s.intersection({region, region_d[region]}).pop()
-        ssa_l = list(df['Area Symbol'][df['NASIS Site Name'] == region_n])
+        # Are NASIS site names current?
+        if not region_d[region] in region_s and region != 'CONUS':
+            arcpy.AddError((
+                f"{region} not found in LIMS report NASIS site names: "
+                 f"{region_s}"
+                ))
+            raise
+        if region != 'CONUS':
+            ssa_l = list(
+                df['Area Symbol'][df['NASIS Site Name'] == region_d[region]]
+            )
+        else:
+            ssa_l = list(df['Area Symbol'])
         # exclude 'MXNL001'
         if 'MXNL001' in ssa_l:
             ssa_l.remove('MXNL001')
@@ -303,6 +317,7 @@ def getSSARegionList(ssurgo_p: str, region_opt: str) -> list[str]:
         # otherwise `ssa_l` is the same
         else:
             ssa_s = set(ssa_l)
+        arcpy.AddMessage(f"number of surveys: {len(ssa_s)}")
 
         # Verify that all surveys have valid download in `ssurgo_p` directory
         ssa_dir = {d.name.removeprefix('soil_').upper()
@@ -906,7 +921,7 @@ Does not return anything.
 
 # --- Main Body
 if __name__ == '__main__':
-    v = '2.3.1'
+    v = '2.3.2'
     arcpy.AddMessage(f'Version: {v}')
     env.parallelProcessingFactor = "85%"
     env.overwriteOutput = True
