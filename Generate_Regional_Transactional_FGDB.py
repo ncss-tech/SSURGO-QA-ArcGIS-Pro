@@ -12,10 +12,20 @@ Created on: 1/16/2014
     @organization: National Soil Survey Center, USDA-NRCS
     @email: alexander.stum@usda.gov
 
-@modified 11/13/2023
+@modified 3/13/2025
     @by: Alexnder Stum
-@version: 2.3.2
+@version: 2.4
 
+# ---
+Update 2.4; 3/13/2025
+- Applied new XY Resolution standard of 0.0001 m to xml workspace files by
+    editing XYScale to 10000 (as in 1/10000 = 0.0001)
+- Inclusion of three SAPOLYGON topology rules, Overlaps, Gaps, Covered by
+    boundary of MUPOLYGON which should highlight inconsistencies with due
+    to updates of MUPOLYGON along survey boundaries.
+- Excluded AK from CONUS construct
+- Added creation of sapoint_gold feature to document changes along survey
+    boundaries as well as the saregional_gold feature.
 # ---
 Updated 11/20/2024
 - Fixed handling of CONUS option
@@ -252,6 +262,7 @@ def getSSARegionList(ssurgo_p: str, region_opt: str) -> list[str]:
     """
     try:
         hi = ('HI',)
+        ak = ('AK',)
         pac = ('GU', 'FM', 'MH', 'MP', 'PW')
         sam = ('AS',)
         prv = ('PR', 'VI')
@@ -308,7 +319,8 @@ def getSSARegionList(ssurgo_p: str, region_opt: str) -> list[str]:
         elif region == 'Southeast':
             ssa_s = {s for s in ssa_l if s[0:2] not in prv}
         elif region == 'CONUS':
-            ssa_s = {s for s in ssa_l if s[0:2] not in hi + pac + sam + prv}
+            ssa_s = {s for s in ssa_l if s[0:2] 
+                     not in hi + pac + sam + prv + ak}
         elif region not in region_d:
             arcpy.AddError(
                 f"{region_opt} does not seem to be a valid region choice"
@@ -514,7 +526,7 @@ def importFeatdesc(ssa_l: list[str], input_p: str, gdb_p: str) -> str:
         return arcpy.AddError(pyErr(func))
 
 
-def createTopology(fd_p: str) -> bool:
+def createTopology(RTSD_p: str) -> bool:
     """Creates a topolgy with the RTSD_FD Feature Dataset
 
     All official soil spatial features have topological considerations. This 
@@ -522,8 +534,8 @@ def createTopology(fd_p: str) -> bool:
 
     Parameters
     ----------
-    fd_p : str
-        Path to the RTSD_FD feature dataset where MUPOLYOGN, etc. are found.
+    RTSD_p : str
+        Path of the new RTSD FGDB
 
     Returns
     -------
@@ -532,6 +544,7 @@ def createTopology(fd_p: str) -> bool:
     """
     
     try:
+        fd_p = RTSD_p + '/FD_RTSD'
         env.workspace = fd_p
         topo_n = "FD_RTSD_Topology"
         topo_p = f"{fd_p}/{topo_n}"
@@ -565,6 +578,9 @@ def createTopology(fd_p: str) -> bool:
         arcpy.AddFeatureClassToTopology_management(
             topo_p, f"{fd_p}/FEATLINE", 1, 1
         )
+        arcpy.AddFeatureClassToTopology_management(
+            topo_p, f"{fd_p}/SAPOLYGON", 1, 1
+        )
         arcpy.SetProgressorPosition()
 
         # Add Topology Rules
@@ -574,6 +590,16 @@ def createTopology(fd_p: str) -> bool:
         )
         arcpy.AddRuleToTopology_management(
             topo_p, "Must Not Have Gaps (Area)", f"{fd_p}/MUPOLYGON"
+        )
+        arcpy.AddRuleToTopology_management(
+            topo_p, "Must Not Overlap (Area)", f"{fd_p}/SAPOLYGON"
+        )
+        arcpy.AddRuleToTopology_management(
+            topo_p, "Must Not Have Gaps (Area)", f"{fd_p}/SAPOLYGON"
+        )
+        arcpy.AddRuleToTopology_management(
+            topo_p, "Boundary Must Be Covered By Boundary Of (Area-Area)",
+            f"{fd_p}/SAPOLYGON", "", f"{fd_p}/MUPOLYGON"
         )
         arcpy.AddRuleToTopology_management(
             topo_p, "Must Not Overlap (Line)", f"{fd_p}/FEATLINE"
@@ -622,7 +648,7 @@ def createTopology(fd_p: str) -> bool:
             topo_p, "Must Be Single Part (Line)", f"{fd_p}/MULINE"
         )
 
-        arcpy.AddMessage("\tAdded 17 rules to the Topology")
+        arcpy.AddMessage("\tAdded 20 rules to the Topology")
         arcpy.SetProgressorPosition()
         arcpy.ResetProgressor()
 
@@ -921,7 +947,7 @@ Does not return anything.
 
 # --- Main Body
 if __name__ == '__main__':
-    v = '2.3.2'
+    v = '2.4'
     arcpy.AddMessage(f'Version: {v}')
     env.parallelProcessingFactor = "85%"
     env.overwriteOutput = True
@@ -984,14 +1010,20 @@ if __name__ == '__main__':
                 arcpy.AddError(f"Failed to append {feat[0]}")
                 arcpy.AddError(msg['error'])
                 exit()
+        
+        # Create sapoint_gold feature
+        arcpy.management.FeatureVerticesToPoints(
+            fd_p + '/SAPOLYGON', gdb_p + '/ProjectRecord/sapoint_gold', "ALL"
+        )
+        arcpy.analysis.PairwiseDissolve(
+            fd_p + '/SAPOLYGON', gdb_p + '/ProjectRecord/saregional_gold'
+        )
 
         # Topology
-        if createTopology(fd_p):
+        if createTopology(gdb_p):
             arcpy.SetProgressorLabel("Validating Topology")
-            arcpy.ValidateTopology_management(
-                os.path.join(fd_p,"FD_RTSD_Topology")
-            )
-            arcpy.AddMessage("\tValidated Topology at 0.1 meters")
+            arcpy.ValidateTopology_management(fd_p + "/FD_RTSD_Topology")
+            arcpy.AddMessage("\tValidated Topology at 0.2 meters")
         else:
             arcpy.AddError(
                 "\n\tFailed to Create Topology. Create Topology Manually"
