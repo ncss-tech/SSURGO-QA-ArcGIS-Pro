@@ -1,89 +1,82 @@
-# QA_CompareSpatialNASISMapunits.py
-#
-# Purpose:  compare MUSYM values in selected featurelayer with MUSYM
-# values from NASIS. Adapted from Kevin Godsey's VBA tool. Sends
-# query to the LIMS report server.
-#
-# Inputs:
-#        AREASYMBOL
-#        TABLE OR FEATURECLASS
-#
-#
-# 11-18-2009 Steve Peaslee, NSSC
+#! /usr/bin/env python3
+# # -*- coding: utf-8 -*-
+"""
+Compare Spatial-NASIS Mapunits
 
-# 04-01-2010 - major revision to make the script compatible with NASIS 6.0
-#              Also works with a table such as MAPUNIT and LEGEND as an
-#              alternative to NASIS.
-# 04-19-2010 - Bug fix. Incorrect parsing of the return from NASIS skipped
-#              the first mapunit.
-# 04-30-2010 - Removed references to MUKEY from documentation
-# 06-09-2010 - Fixed a few minor problems such as featurelayer/featureclass issues
-#
-# 06-19-2013 - Updating to use arcpy  and da cursors
-# 06-24-2013 - Revamped html handling for NASIS
-# 06-24-2013 - Added exclusion for NOTCOM. It is the only mismatch allowed for now.
-# 09-06-2013 - Major performance increase. Moved spatial mapunit list to a single function
-#              that stores up front the entire mapunit list by areasymbol in a Python dictionary.
-# 09-07-2013 - Altering operation to always run against the underlying featureclass to prevent any records being skipped
-#
-# 10-21-2013 - Using new NASIS report that allows specification of the different MUSTATUS types
-# 10-31-2013 - Renamed this script from 'Get_Mukey.py'...
+compare MUSYM values in selected featurelayer with MUSYM
+values from NASIS. Adapted from Kevin Godsey's VBA tool. Sends
+query to the LIMS report server.
 
-# ==========================================================================================
-# Updated  9/3/2020 - Adolfo Diaz
-#
-# - Updated and Tested for ArcGIS Pro 2.4.2 and python 3.6
-# - Updated urllib2 to urllib, HTMLParser to html.parser and htmlentitydefs to html.entities
-# - Python3 does not read the html code as a string but as a bytearray, so url read needs to
-#   be converted to string with decode
-# - Added a check to see if MUKEY field exists when using the Update MUKEY values option.
-#   MUKEY field will automatically be added if it doesn't exist.
-# - Added code to set Mapunt Status to 'Correlated' if Update MUKEY values option is turned
-#   on and user did not specify Mapunit Status.
-# - Updated workspace and report folder if input is .shp.  Prior to this, output text files for
-#   shapefile inputs were written to 1 directory above.
-# - Added code exit script if Mapunit Status or Update MUKEY Values options were not selected
-# - All intermediate datasets are written to "in_memory" instead of written to a FGDB and
-#   and later deleted.  This avoids having to check and delete intermediate data during every
-#   execution.
-# - Removed setScratchWorkspace function since it is not needed for this tool.
-# - All cursors were updated to arcpy.da
-# - Describe functions were updated to describe.da
-# - Updated print_exception function.  Traceback functions slightly changed for Python 3.6.
-# - Added parallel processing factor environment
-# - swithced from sys.exit() to exit()
-# - Updated errorMsg function to handle exit() messages
-# - Every function including main is in a try/except clause
-# - Main code is wrapped in if __name__ == '__main__': even though script will never be
-#   used as independent library.
-# - Normal messages are no longer Warnings unnecessarily.
+@author: Steve Peaslee
+@maintainer: Alexander Stum
+    @title:  GIS Specialist & Soil Scientist
+    @organization: National Soil Survey Center, USDA-NRCS
+    @email: alexander.stum@usda.gov
+
+@modified 4/02/2025
+    @by: Alexnder Stum
+@version: 1.1"
+
+# ---
+Update 1.1; 4/05/2025
+- Added Edit session enable to update mukey of features involved with 
+    topologies or relationships
+
+==========================================================================================
+11-18-2009 Steve Peaslee, NSSC
+
+04-01-2010 - major revision to make the script compatible with NASIS 6.0
+             Also works with a table such as MAPUNIT and LEGEND as an
+             alternative to NASIS.
+04-19-2010 - Bug fix. Incorrect parsing of the return from NASIS skipped
+             the first mapunit.
+04-30-2010 - Removed references to MUKEY from documentation
+06-09-2010 - Fixed a few minor problems such as featurelayer/featureclass issues
+
+06-19-2013 - Updating to use arcpy  and da cursors
+06-24-2013 - Revamped html handling for NASIS
+06-24-2013 - Added exclusion for NOTCOM. It is the only mismatch allowed for now.
+09-06-2013 - Major performance increase. Moved spatial mapunit list to a single function
+             that stores up front the entire mapunit list by areasymbol in a Python dictionary.
+09-07-2013 - Altering operation to always run against the underlying featureclass to prevent any records being skipped
+
+10-21-2013 - Using new NASIS report that allows specification of the different MUSTATUS types
+10-31-2013 - Renamed this script from 'Get_Mukey.py'...
+
+Updated  9/3/2020 - Adolfo Diaz
+
+- Updated and Tested for ArcGIS Pro 2.4.2 and python 3.6
+- Updated urllib2 to urllib, HTMLParser to html.parser and htmlentitydefs to html.entities
+- Python3 does not read the html code as a string but as a bytearray, so url read needs to
+  be converted to string with decode
+- Added a check to see if MUKEY field exists when using the Update MUKEY values option.
+  MUKEY field will automatically be added if it doesn't exist.
+- Added code to set Mapunt Status to 'Correlated' if Update MUKEY values option is turned
+  on and user did not specify Mapunit Status.
+- Updated workspace and report folder if input is .shp.  Prior to this, output text files for
+  shapefile inputs were written to 1 directory above.
+- Added code exit script if Mapunit Status or Update MUKEY Values options were not selected
+- All intermediate datasets are written to "in_memory" instead of written to a FGDB and
+  and later deleted.  This avoids having to check and delete intermediate data during every
+  execution.
+- Removed setScratchWorkspace function since it is not needed for this tool.
+- All cursors were updated to arcpy.da
+- Describe functions were updated to describe.da
+- Updated print_exception function.  Traceback functions slightly changed for Python 3.6.
+- Added parallel processing factor environment
+- swithced from sys.exit() to exit()
+- Updated errorMsg function to handle exit() messages
+- Every function including main is in a try/except clause
+- Main code is wrapped in if __name__ == '__main__': even though script will never be
+  used as independent library.
+- Normal messages are no longer Warnings unnecessarily.
+"""
 
 # create a subclass and override the data handler methods
 ## ===============================================================================================================
 from html.parser import HTMLParser
 from html.entities import name2codepoint
 
-class MyHTMLParser(HTMLParser):
-    # create an HTMLParser class, mainly designed to get the data block within
-    # the html returned by the NASIS Online report.
-
-    # initialize the data block variable
-
-    try:
-        dataDict = dict()
-
-        def handle_data(self, data):
-            #print("Data     :", data)
-
-            if str(data).strip():
-                # load the data into a dictionary
-                musym, mukey = data.split()
-                musym = musym.strip()
-                mukey = mukey.replace(",","").strip()
-                self.dataDict[musym] = mukey
-
-    except:
-        errorMsg()
 
 ## ===============================================================================================================
 def errorMsg():
@@ -121,6 +114,27 @@ def AddMsgAndPrint(msg, severity=0):
 
     elif severity == 2:
         arcpy.AddError(msg)
+class MyHTMLParser(HTMLParser):
+    # create an HTMLParser class, mainly designed to get the data block within
+    # the html returned by the NASIS Online report.
+
+    # initialize the data block variable
+
+    try:
+        dataDict = dict()
+
+        def handle_data(self, data):
+            #print("Data     :", data)
+
+            if str(data).strip():
+                # load the data into a dictionary
+                musym, mukey = data.split()
+                musym = musym.strip()
+                mukey = mukey.replace(",","").strip()
+                self.dataDict[musym] = mukey
+
+    except:
+        errorMsg()
 
 ## ===================================================================================
 def NASIS_List(theAreasymbol, theURL, theParameters, muStatus):
@@ -236,15 +250,17 @@ def CompareMusym(dNASIS, musymList, theAreasymbol, dBadSurveys):
 
     except:
         errorMsg()
-        dBadSurveys[theAreasymbol] = (0, 0, e, "","")
+        dBadSurveys[theAreasymbol] = (0, 0, None, "","")
         return False, dBadSurveys
 
 ## ===================================================================================
-def UpdateMukeys(theInput, dNASIS, theAreasymbol):
+def UpdateMukeys(theInput, dNASIS, theAreasymbol, gdb):
     # Update layer MUKEY values for the specified AREASYMBOL value
 
     try:
-
+        edit = arcpy.da.Editor(gdb)
+        edit.startEditing(True, True)
+        edit.startOperation()
         fieldList = ["MUSYM", "MUKEY"]
         queryField = arcpy.AddFieldDelimiters(theInput, "AREASYMBOL")
         sql = ""
@@ -263,10 +279,13 @@ def UpdateMukeys(theInput, dNASIS, theAreasymbol):
                 if musym in dNASIS:             # Remove this to if NOTCOMs are NOT excluded from the check
                     outRow[1] = dNASIS[musym]
                     outCursor.updateRow(outRow)
-
+        edit.stopOperation()
+        edit.stopEditing(True)
+        del edit
         return True
 
     except:
+        del edit
         errorMsg()
         return False
 
@@ -329,6 +348,7 @@ from arcpy import env
 if __name__ == '__main__':
 
     try:
+        v = '1.1'
         theInput = arcpy.GetParameterAsText(0)
         asValues = arcpy.GetParameter(1)    # value list containing Areasymbol
         bUpdate = arcpy.GetParameter(2)
@@ -337,6 +357,7 @@ if __name__ == '__main__':
         mx3 = arcpy.GetParameter(5)   # correlated
         mx4 = arcpy.GetParameter(6)   # additional
 
+        arcpy.AddMessage(f"Compare Spatial-NASIS Mapunits {v=}")
         # Use most of the cores on the machine where ever possible
         arcpy.env.parallelProcessingFactor = "75%"
 
@@ -357,6 +378,9 @@ if __name__ == '__main__':
 
             if wDesc['dataType'].upper() == "FEATUREDATASET":
                 ws = os.path.dirname(ws)
+            #     gdb = os.path.dirname(ws)
+            # else:
+            #     gdb = ws
 
             if theDataType == 'FEATURELAYER':
                 theInput = theCatalogPath
@@ -476,7 +500,9 @@ if __name__ == '__main__':
                                 bMUKEYfldExist = True
 
                         if bGood:
-                            if UpdateMukeys(theInput, dNASIS, theAreasymbol):
+                            if UpdateMukeys(
+                                theInput, dNASIS, theAreasymbol, ws
+                                ):
                                 AddMsgAndPrint("\n\tSuccessfully Updated MUKEY values")
                             else:
                                 AddMsgAndPrint("\n\tFailed to update MUKEY values")
