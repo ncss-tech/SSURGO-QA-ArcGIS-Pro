@@ -37,11 +37,14 @@ The tool will handle Shapefiles and Geodatabase feature classes.
     @organization: National Soil Survey Center, USDA-NRCS
     @email: alexander.stum@usda.gov
 
-@created 2/21/2017
-@modified 11/27/23
+@modified 4/02/2025
     @by: Alexnder Stum
-@version: 1.1
+@version: 1.2
 
+# ---
+Update 1.2; 4/05/2025
+- Added Edit session enable to update mukey of features involved with 
+    topologies or relationships
 # ---
 Updated 11/27/2023 - Alexander Stum
 - Removed functions AddMsgAndPring, errorMsg, and splitThousands
@@ -150,7 +153,7 @@ def findField(lyr, ref_fld):
         arcpy.AddError(pyErr(func))
         return False
 
-## ================================================================================================================
+
 def getUniqueValues(theInput,theField):
     """ This function creates a list of unique values from theInput using 
     theField as the source field.  If the source field is AREASYMBOL than the 
@@ -300,8 +303,8 @@ def parseValuesIntoLists(valueList,limit=1000):
         arcpy.AddError(pyErr(func))
         exit()
 
-## ===================================================================================
-def getNATMUSYM(listsOfValues, featureLayer):
+
+def getNATMUSYM(listsOfValues, featureLayer, gdb):
     """POST request which uses urllib and JSON to send query to SDM Tabular 
     Service and returns data in JSON format.  Sends a list of values 
     (either MUKEYs or Areasymbols) and returns NATSYM and MUNAME values. 
@@ -483,6 +486,10 @@ def getNATMUSYM(listsOfValues, featureLayer):
              '753571': ('2tjpl', 'Amery sandy loam, 6 to 12 percent slopes'),
              '753574': ('2szdz', 'Amery sandy loam, 1 to 6 percent slopes')}"""
 
+        if gdb:
+            edit = arcpy.da.Editor(gdb)
+            edit.startEditing(True, True)
+            edit.startOperation()
         with arcpy.da.UpdateCursor(
             featureLayer, [mukeyField,'NATMUSYM','MUNAME']
         ) as cursor:
@@ -507,7 +514,10 @@ def getNATMUSYM(listsOfValues, featureLayer):
                 except:
                     arcpy.AddError("\tInvalid MUKEY: " + mukey)
                     continue
-
+        if gdb:
+            edit.stopOperation()
+            edit.stopEditing(True)
+            del edit
         arcpy.ResetProgressor()
 
         arcpy.AddMessage(
@@ -525,10 +535,12 @@ def getNATMUSYM(listsOfValues, featureLayer):
     except arcpy.ExecuteError:
         func = sys._getframe().f_code.co_name
         arcpy.AddError(arcpyErr(func))
+        del edit
         return False
     except:
         func = sys._getframe().f_code.co_name
         arcpy.AddError(pyErr(func))
+        del edit
         return False
 
 
@@ -546,10 +558,13 @@ from arcpy import env
 if __name__ == '__main__':
 
     try:
+        v = '1.2'
+        arcpy.AddMessage(f"Insert NATSYM and MUNAME{v=}")
         arcpy.env.parallelProcessingFactor = "75%"
         arcpy.env.overwriteOutput = True
 
         inputFeature = arcpy.GetParameterAsText(0)
+
         # SAPOLYGON will be used to summarize by Areasymbol
         bFGDBsapolygon = False
         # Areasymbol field is the source field
@@ -567,6 +582,7 @@ if __name__ == '__main__':
         theElementType = theDesc['dataElementType']
         # Input feature is a Shapefile or Raster
         if theElementType.lower() in ('deshapefile', 'derasterdataset'):
+            theFGDBpath = None
             # Make sure raster input has an attribute table
             if theElementType == 'DERasterDataset':
                 bRaster = True
@@ -624,7 +640,7 @@ if __name__ == '__main__':
         # Input feature is a feature class
         elif theElementType.lower().find('featureclass') > -1:
             theFCpath = theDesc['catalogPath']
-            theFGDBpath = theFCpath[:theFCpath.find(".gdb")+4]
+            theFGDBpath = theFCpath[:theFCpath.find(".gdb") + 4]
             arcpy.env.workspace = theFGDBpath
 
             mukeyField = findField(theFCpath,"MUKEY")
@@ -686,7 +702,7 @@ if __name__ == '__main__':
         uniqueValueList = getUniqueValues(source, sourceField)
 
         # Populate input Feature with NATMUSYM and MUNAME values
-        if not getNATMUSYM(uniqueValueList, inputFeature):
+        if not getNATMUSYM(uniqueValueList, inputFeature, theFGDBpath):
             arcpy.AddError("\nFailed to update NATSYM field")
 
     except arcpy.ExecuteError:
