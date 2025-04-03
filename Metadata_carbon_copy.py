@@ -16,9 +16,13 @@ and the following header line is added:
     @email: alexander.stum@usda.gov
 
 @created 3/19/2025
-@modified 3/19/2025
+@modified 4/03/2025
     @by: Alexnder Stum
-@version: 1.0
+@version: 1.1
+
+# ---
+Update 1.1; 4/03/2025
+- The script used incorrect regex logic to find export files
 """
 
 
@@ -81,9 +85,12 @@ def arcpyErr(func: str) -> str:
 
 def main():
     try:
+        v = '1.1'
+        arcpy.AddMessage(f"Metadata Carbon Copy {v=}")
         ssurgo_p = arcpy.GetParameterAsText(0)
         export_p = arcpy.GetParameterAsText(1)
 
+        none_flag = None
         hdr = '<?xml version="1.0" encoding="ISO-8859-1"?>'
 
         source_dirs = [
@@ -98,17 +105,16 @@ def main():
         )]
 
         export_dirs = [
-            d_n for d in os.scandir(export_p) if (
-                d.is_dir() and re.match(
-                    r"[a-zA-Z]{2}[0-9]{3}",
-                    d_n := d.name.removeprefix('soil_')
-                )
-                and os.path.exists(f"{d.path}/tabular")
-                and os.path.exists(f"{d.path}/spatial")
+            d.name for d in os.scandir(export_p) if (
+                d.is_dir() and re.match(r"[a-z]{2}[0-9]{3}", d.name)
+                and os.path.exists(f"{d.path}/{d.name}_a.shp")
+                and os.path.exists(f"{d.path}/{d.name}_b.shp")
         )]
-        
+
+        arcpy.AddMessage(f"{len(export_dirs)} export directories found")
         strip = lambda l: l.lstrip() if l.lstrip()  else '\n'
         for ex_d in export_dirs:
+            ex_d = ex_d.upper()
             if ex_d in source_dirs:
                 # read file
                 txt = f"{ssurgo_p}/{ex_d}/soil_metadata_{ex_d.lower()}.xml"
@@ -122,8 +128,14 @@ def main():
                     write_f.write(hdr)
                     write_f.writelines(txt_lines)
                 arcpy.AddMessage(f"\tSuccessfully copied {txt}")
+                none_flag = 1
             else:
                 arcpy.AddWarning(f"A source directory not found for {ex_d}")
+        
+        if not none_flag:
+            arcpy.AddWarning(
+                "No valid export folders found and no metatdata files copied"
+            )
 
     except arcpy.ExecuteError:
         func = sys._getframe().f_code.co_name
