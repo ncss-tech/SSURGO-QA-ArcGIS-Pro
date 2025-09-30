@@ -12,10 +12,13 @@ Created on: 1/16/2014
     @organization: National Soil Survey Center, USDA-NRCS
     @email: alexander.stum@usda.gov
 
-@modified 3/13/2025
+@modified 9/23/2025
     @by: Alexnder Stum
-@version: 2.4
+@version: 2.5
 
+# ---
+Update 2.5; 9/23/2025
+- Enabled to accept soil survey boundary feature to define SSA's for the RTSD
 # ---
 Update 2.4; 3/13/2025
 - Applied new XY Resolution standard of 0.0001 m to xml workspace files by
@@ -947,7 +950,7 @@ Does not return anything.
 
 # --- Main Body
 if __name__ == '__main__':
-    v = '2.4'
+    v = '2.5'
     arcpy.AddMessage(f'Version: {v}')
     env.parallelProcessingFactor = "85%"
     env.overwriteOutput = True
@@ -960,11 +963,19 @@ if __name__ == '__main__':
     # Parameter 2: Input Directory where the 
     # original SDM spatial and tabular data exist.
     ssurgo_p = arcpy.GetParameterAsText(2)
+    sa_lyr = arcpy.GetParameter(3)
     startTime = datetime.now()
 
     try:
         # Generate dictionary {soil survey areas: directroy path}
-        ssa_l = getSSARegionList(ssurgo_p, region_opt)
+        if sa_lyr:
+            sCur = arcpy.da.SearchCursor(sa_lyr, 'AREASYMBOL')
+            ssa_l = list({ssa for ssa, in sCur})
+            del sCur
+            arcpy.AddMessage(f"Building RTSD with these SSA's:\n{ssa_l}")
+            # sys.exit()
+        else:   
+            ssa_l = getSSARegionList(ssurgo_p, region_opt)
         # Exit if dictionary is empty
         if not ssa_l:
             exit()
