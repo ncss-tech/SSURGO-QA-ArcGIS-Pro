@@ -17,6 +17,11 @@ Created on: 1/16/2014
 @version: 2.5
 
 # ---
+Update 2.5.1; 11/13/2025
+- if soil survey layer not provided parameter 3 still returns a geoprocessing 
+    value object, but with a null value. 
+    Fixed conditional statement to recognize this.
+# ---
 Update 2.5; 9/23/2025
 - Enabled to accept soil survey boundary feature to define SSA's for the RTSD
 # ---
@@ -950,7 +955,7 @@ Does not return anything.
 
 # --- Main Body
 if __name__ == '__main__':
-    v = '2.5'
+    v = '2.5.1'
     arcpy.AddMessage(f'Version: {v}')
     env.parallelProcessingFactor = "85%"
     env.overwriteOutput = True
@@ -968,7 +973,7 @@ if __name__ == '__main__':
 
     try:
         # Generate dictionary {soil survey areas: directroy path}
-        if sa_lyr:
+        if sa_lyr.value:
             sCur = arcpy.da.SearchCursor(sa_lyr, 'AREASYMBOL')
             ssa_l = list({ssa for ssa, in sCur})
             del sCur
