@@ -16,8 +16,10 @@ Created on: 9/30/2025
 
 @modified 12/02/2025
     @by: Alexnder Stum
-@version: 1.1
+@version: 1.1.1
 
+# --- version 1.1.1, 12/02/2025
+- Changed MUNAME schema to 240 characters
 # --- version 1.1, 12/02/2025
 - Improved messaging
 - Fixed capitalization logic error for MUNAME and MUKEY
@@ -137,7 +139,7 @@ if __name__ == '__main__':
     try:
         gdb_p = arcpy.GetParameterAsText(0)
         feat_n = arcpy.GetParameterAsText(1)
-        v = '1.1'
+        v = '1.1.1'
         arcpy.AddMessage(f'Version: {v}')
 
         feat_p = f"{gdb_p}/{feat_n}"
@@ -160,7 +162,7 @@ if __name__ == '__main__':
             field_desription += "natmusym TEXT 'National MUSYM' 23 # #;"
             field_l.append('natmusym')
         if 'muname' in check_l:
-            field_desription += "MUNAME TEXT 'Mapunit Name' 175 # #"
+            field_desription += "MUNAME TEXT 'Mapunit Name' 240 # #"
             field_l.append('MUNAME')
         field_desription = field_desription.rstrip(';')
 
@@ -228,5 +230,4 @@ if __name__ == '__main__':
             del edit
         except:
             pass
-
 
