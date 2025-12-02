@@ -137,7 +137,7 @@ if __name__ == '__main__':
     try:
         gdb_p = arcpy.GetParameterAsText(0)
         feat_n = arcpy.GetParameterAsText(1)
-        v = '1.0'
+        v = '1.1'
         arcpy.AddMessage(f'Version: {v}')
 
         feat_p = f"{gdb_p}/{feat_n}"
@@ -228,4 +228,5 @@ if __name__ == '__main__':
             del edit
         except:
             pass
+
 
