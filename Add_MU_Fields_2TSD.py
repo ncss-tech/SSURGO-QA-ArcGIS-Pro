@@ -14,9 +14,13 @@ Created on: 9/30/2025
     @organization: National Soil Survey Center, USDA-NRCS
     @email: alexander.stum@usda.gov
 
-@modified 9/30/2025
+@modified 12/02/2025
     @by: Alexnder Stum
-@version: 1.0
+@version: 1.1
+
+# --- version 1.1, 12/02/2025
+- Improved messaging
+- Fixed capitalization logic error for MUNAME and MUKEY
 """
 
 
@@ -142,19 +146,20 @@ if __name__ == '__main__':
         check_l = ['mukey', 'natmusym', 'muname']
         d = arcpy.Describe(feat_p)
         for f in d.fields:
-            arcpy.AddMessage(f.name.lower())
+            #arcpy.AddMessage(f.name.lower())
             if f.name.lower() in check_l:
                 check_l.remove(f.name.lower())
+                arcpy.AddMessage(f"{f.name} field already present")
 
         field_desription = ""
         field_l = []
-        if 'MUKEY' in check_l:
+        if 'mukey' in check_l:
             field_desription = "MUKEY LONG # # # #;"
             field_l.append('MUKEY')
         if 'natmusym' in check_l:
             field_desription += "natmusym TEXT 'National MUSYM' 23 # #;"
             field_l.append('natmusym')
-        if 'MUNAME' in check_l:
+        if 'muname' in check_l:
             field_desription += "MUNAME TEXT 'Mapunit Name' 175 # #"
             field_l.append('MUNAME')
         field_desription = field_desription.rstrip(';')
