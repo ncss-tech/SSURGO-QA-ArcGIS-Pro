@@ -14,10 +14,14 @@ Created on: 9/30/2025
     @organization: National Soil Survey Center, USDA-NRCS
     @email: alexander.stum@usda.gov
 
-@modified 12/02/2025
+@modified 12/03/2025
     @by: Alexnder Stum
-@version: 1.1.1
+@version: 1.2
 
+# --- version 1.2, 12/03/2025
+- Try second time for connection timeouts
+- Added overwrite parameter, allowing to pick up where it last left off
+- Save edits of acquired surveys
 # --- version 1.1.1, 12/02/2025
 - Changed MUNAME schema to 240 characters
 # --- version 1.1, 12/02/2025
@@ -31,6 +35,7 @@ import traceback
 import requests
 import pandas as pd
 import arcpy
+import time
 
 
 def pyErr(func: str) -> str:
@@ -115,7 +120,18 @@ def getRequest(ssa: str) -> pd.DataFrame:
         dRequest["format"] = "XML"
         dRequest["query"] = sql_q
         
-        html = requests.post(url, data=dRequest).content
+        try:
+            html = requests.post(url, data=dRequest).content
+        except:
+            etype, exc, tb = sys.exc_info()
+            exc = str(exc)
+            if "ConnectTimeoutError" in exc:
+                time.time(2)
+                arcpy.AddMessage("\t2nd try")
+                html = requests.post(url, data=dRequest).content
+            else:
+                arcpy.AddError(pyErr('getRequest'))
+                return None
 
         dtype = {
             'id': object, 'element': object, 'musym': str, 'mukey': 'float64', 
@@ -130,6 +146,7 @@ def getRequest(ssa: str) -> pd.DataFrame:
         del html
         return df
     except:
+        arcpy.AddMessage(f"\tFailed to get {ssa}")
         arcpy.AddError(pyErr('getRequest'))
         return None
 
@@ -139,7 +156,8 @@ if __name__ == '__main__':
     try:
         gdb_p = arcpy.GetParameterAsText(0)
         feat_n = arcpy.GetParameterAsText(1)
-        v = '1.1.1'
+        overwrite = arcpy.GetParameter(2)
+        v = '1.2'
         arcpy.AddMessage(f'Version: {v}')
 
         feat_p = f"{gdb_p}/{feat_n}"
@@ -194,12 +212,19 @@ if __name__ == '__main__':
         df = None
         for u_row in uCur:
             ssa = u_row[0]
+            musym = u_row[1]
+            mukey = u_row[2]
+            natsym = u_row[3]
+            muname = u_row[4]
+            if not overwrite and mukey and natsym and muname:
+                continue
             # cursor is sorted by SSA so request by SSA
             if ssa != ssa_k:
                 arcpy.AddMessage(f"Populating {ssa}")
                 ssa_k = ssa
                 df = getRequest(ssa)
-            musym = u_row[1]
+            
+            # Get mapunit row from dataframe
             # df_row: musym, mukey, nationalmusym, muname
             df_row = list(*df[df['musym']==musym].values)
             if df_row:
@@ -227,6 +252,7 @@ if __name__ == '__main__':
         except:
             pass
         try:
+            edit.stopEditing(True)
             del edit
         except:
             pass
