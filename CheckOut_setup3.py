@@ -10,11 +10,16 @@ Created on: 10/12/2018
     @organization: National Soil Survey Center, USDA-NRCS
     @email: alexander.stum@usda.gov
 
-@modified 3/13/2025
+@modified 1/6/2026
     @by: Alexnder Stum
-@version: 3.3
+@version: 3.4
 
 # ---
+Update 3.4; 1/6/2026
+- Added  topology rules:
+    * SAPOLYGON Gap/Overlap
+    * Area-Area between MUPOLYGON/SAPOLYGON
+- Fixed capitalization when checking for existing fields
 Update 3.3; 3/13/2025
 - Changed XY Resolution to 0.0001 Meters
 - Added all RTSD features
@@ -149,6 +154,7 @@ def createTopology(fd_p: str, topo_n: str) -> bool:
         arcpy.AddFeatureClassToTopology_management(
             topo_p, f"{fd_p}/SAPOLYGON", 1, 1
         )
+
         arcpy.SetProgressorPosition()
 
         # Add Topology Rules
@@ -158,6 +164,16 @@ def createTopology(fd_p: str, topo_n: str) -> bool:
         )
         arcpy.AddRuleToTopology_management(
             topo_p, "Must Not Have Gaps (Area)", f"{fd_p}/MUPOLYGON"
+        )
+        arcpy.AddRuleToTopology_management(
+            topo_p, "Must Not Overlap (Area)", f"{fd_p}/SAPOLYGON"
+        )
+        arcpy.AddRuleToTopology_management(
+            topo_p, "Must Not Have Gaps (Area)", f"{fd_p}/SAPOLYGON"
+        )
+        arcpy.AddRuleToTopology_management(
+            topo_p, "Boundary Must Be Covered By Boundary Of (Area-Area)",
+            f"{fd_p}/SAPOLYGON", "", f"{fd_p}/MUPOLYGON"
         )
         arcpy.AddRuleToTopology_management(
             topo_p, "Must Not Overlap (Line)", f"{fd_p}/FEATLINE"
@@ -223,7 +239,7 @@ def createTopology(fd_p: str, topo_n: str) -> bool:
 
 
 try:
-    v = '3.2'
+    v = '3.4'
     gdb_p = arcpy.GetParameterAsText(0)
     gdb_n = os.path.basename(gdb_p)
     path = os.path.dirname(gdb_p)
@@ -329,10 +345,10 @@ try:
 
     # Add reference fields to MUPOLYGON
     arcpy.AddMessage('Updating fields')
-    fields = {f.name for f in arcpy.Describe(ltsd_mup).fields}
+    fields = {f.name.lower() for f in arcpy.Describe(ltsd_mup).fields}
     arcpy.CalculateField_management(
         ltsd_mup, 'Acres', "!SHAPE.area@ACRES!", field_type='FLOAT')
-    if 'AreaSub' not in fields:
+    if 'areasub' not in fields:
         arcpy.management.AddField(ltsd_mup, 'AreaSub', 'SHORT')
     if 'orig_musym' not in fields:
         arcpy.management.AddField(
@@ -340,17 +356,17 @@ try:
             field_alias='orig MUSYM'
         )
         arcpy.CalculateField_management(ltsd_mup, 'orig_musym', "!musym!")
-    if 'MUNAME' not in fields:
+    if 'muname' not in fields:
         arcpy.management.AddField(
             ltsd_mup, 'MUNAME', 'TEXT', field_length=175, 
             field_alias='orig MUNAME'
         )
-    if 'NATMUSYM' not in fields:
+    if 'natmusym' not in fields:
         arcpy.management.AddField(
             ltsd_mup, 'NATMUSYM', 'TEXT', field_length=6, 
             field_alias='orig NATMUSYM'
         )
-    if 'MUKEY' not in fields:
+    if 'mukey' not in fields:
         arcpy.management.AddField(
             ltsd_mup, 'MUKEY', 'TEXT', field_length=30, 
             field_alias='orig MUKEY'
@@ -425,6 +441,7 @@ try:
                     uCur.updateRow((A, mu) + legends[A][mu])
                 else:
                     arcpy.AddWarning(f"Mapunit {A}: {mu} not found on SDA")
+
     # Option to create musym domains and aresymbol subtype
     if domain_b:
         arcpy.SetSubtypeField_management(ltsd_mup, 'AreaSub')
