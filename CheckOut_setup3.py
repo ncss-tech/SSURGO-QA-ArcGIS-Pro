@@ -10,10 +10,13 @@ Created on: 10/12/2018
     @organization: National Soil Survey Center, USDA-NRCS
     @email: alexander.stum@usda.gov
 
-@modified 1/6/2026
+@modified 1/12/2026
     @by: Alexnder Stum
-@version: 3.4
+@version: 3.4.1
 
+# ---
+Update 3.4.1; 1/12/2026
+- Had a hard coded reference to 0.0002 XY Tolerance, amended to 0.2
 # ---
 Update 3.4; 1/6/2026
 - Added  topology rules:
@@ -287,7 +290,7 @@ try:
     
     arcpy.AddMessage("version " + v)
     arcpy.CreateFileGDB_management(path, gdb_n)
-    arcpy.env.XYTolerance = "0.0001 Meter"
+    arcpy.env.XYTolerance = "0.2 Meter"
     sr = arcpy.Describe(rtsd_mup).spatialReference
 
     arcpy.AddMessage(f"XY Tolerance: {sr.XYTolerance}")
