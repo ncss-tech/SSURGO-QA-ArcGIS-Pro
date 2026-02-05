@@ -42,6 +42,7 @@ Changed Feature Dataset XYResolution to 0.1 m and Cluster Tolerance to 0.2 m
 Added MUNAME field and modified MUSYM values to be themselves
 
 """
+v = '3.4.1'
 
 import os
 import arcpy
@@ -102,6 +103,8 @@ def arcpyErr(func: str) -> str:
         return msgs
     except:
         return "Error in arcpyErr method"
+    
+
 def createTopology(fd_p: str, topo_n: str) -> bool:
     """Creates a topolgy with the RTSD_FD Feature Dataset
 
@@ -242,7 +245,6 @@ def createTopology(fd_p: str, topo_n: str) -> bool:
 
 
 try:
-    v = '3.4'
     gdb_p = arcpy.GetParameterAsText(0)
     gdb_n = os.path.basename(gdb_p)
     path = os.path.dirname(gdb_p)
