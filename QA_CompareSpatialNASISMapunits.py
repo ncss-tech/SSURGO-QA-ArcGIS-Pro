@@ -13,16 +13,21 @@ query to the LIMS report server.
     @organization: National Soil Survey Center, USDA-NRCS
     @email: alexander.stum@usda.gov
 
-@modified 4/02/2025
+@modified 02/10/2026
     @by: Alexnder Stum
-@version: 1.1"
+@version: 1.2
 
+# -- Update 1.2; 02/10/2026
+- Removed function Number_Format in-liue of f-string functionality
+- Removed printmsg function replaced with arcpy print out functions
+- reformatted to 80 chars
+- Added backup LIMS report with pandas read html
 # ---
 Update 1.1; 4/05/2025
 - Added Edit session enable to update mukey of features involved with 
     topologies or relationships
 
-==========================================================================================
+================================================================================
 11-18-2009 Steve Peaslee, NSSC
 
 04-01-2010 - major revision to make the script compatible with NASIS 6.0
@@ -71,49 +76,48 @@ Updated  9/3/2020 - Adolfo Diaz
   used as independent library.
 - Normal messages are no longer Warnings unnecessarily.
 """
+v = '1.2'
 
-# create a subclass and override the data handler methods
-## ===============================================================================================================
 from html.parser import HTMLParser
-from html.entities import name2codepoint
+import pandas as pd
+
+# Import modules
+import sys
+import os
+import arcpy
+import traceback
+from urllib.request import urlopen, URLError, HTTPError
+from arcpy import env
 
 
-## ===============================================================================================================
+## =============================================================================
 def errorMsg():
 
     try:
 
         exc_type, exc_value, exc_traceback = sys.exc_info()
-        theMsg = "\t" + traceback.format_exception(exc_type, exc_value, exc_traceback)[1] + "\n\t" + traceback.format_exception(exc_type, exc_value, exc_traceback)[-1]
+        theMsg = ("\t"
+                  f"{traceback.format_exception(
+                      exc_type, exc_value, exc_traceback)[1]}"
+                      f"\n\t{traceback.format_exception(
+                          exc_type, exc_value, exc_traceback)[-1]}")
 
         if theMsg.find("exit") > -1:
-            AddMsgAndPrint("\n\n")
+            arcpy.AddMessage("\n\n")
             pass
         else:
-            AddMsgAndPrint("\n----------------------------------- ERROR Start -----------------------------------",2)
-            AddMsgAndPrint(theMsg,2)
-            AddMsgAndPrint("------------------------------------- ERROR End -----------------------------------\n",2)
+            arcpy.AddError(
+                "\n----------------------------------- " \
+                f"ERROR Start -----------------------------------\n{theMsg}"
+                "/n-------------------------------------"
+                "ERROR End -----------------------------------\n"
+            )
 
     except:
-        AddMsgAndPrint("Unhandled error in print_exception method", 2)
+        arcpy.AddMessage("Unhandled error in print_exception method")
         pass
 
-## ================================================================================================================
-def AddMsgAndPrint(msg, severity=0):
-    # prints message to screen if run as a python script
-    # Adds tool message to the geoprocessor
-    # Split the message on  \n first, so that if it's multiple lines, a GPMessage will be added for each line
 
-    print(msg)
-
-    if severity == 0:
-        arcpy.AddMessage(msg)
-
-    elif severity == 1:
-        arcpy.AddWarning(msg)
-
-    elif severity == 2:
-        arcpy.AddError(msg)
 class MyHTMLParser(HTMLParser):
     # create an HTMLParser class, mainly designed to get the data block within
     # the html returned by the NASIS Online report.
@@ -124,10 +128,10 @@ class MyHTMLParser(HTMLParser):
         dataDict = dict()
 
         def handle_data(self, data):
-            #print("Data     :", data)
 
             if str(data).strip():
                 # load the data into a dictionary
+
                 musym, mukey = data.split()
                 musym = musym.strip()
                 mukey = mukey.replace(",","").strip()
@@ -136,16 +140,16 @@ class MyHTMLParser(HTMLParser):
     except:
         errorMsg()
 
-## ===================================================================================
+## =============================================================================
 def NASIS_List(theAreasymbol, theURL, theParameters, muStatus):
     # Create a dictionary of NASIS MUSYM values
     # Sometimes having problem getting first mapunit (ex. Adda in IN071)
 
     try:
-        #AddMsgAndPrint(" \nRetrieving MUSYM values for survey area '" + theAreasymbol + "' from NASIS", 1)
-
-        # Problem with NASIS 6.0. It doesn't recognize the parameter for some unknown reason
-        # Seems to work if we put the entire URL and Parameter into one string and set
+        # Problem with NASIS 6.0. 
+        # It doesn't recognize the parameter for some unknown reason
+        # Seems to work if we put the entire URL and 
+        # Parameter into one string and set
         # the Parameter value to None
         #
         # Use muStatus to set the mapunit status option for the report
@@ -153,6 +157,7 @@ def NASIS_List(theAreasymbol, theURL, theParameters, muStatus):
         # In theory, should only be #3 correlated for SSURGO downloads
         #
         theURL = theURL + theParameters + theAreasymbol + muStatus
+        arcpy.AddMessage(theURL)
         resp = urlopen(theURL,None)
         thePage = resp.read().decode("utf8")
 
@@ -162,13 +167,27 @@ def NASIS_List(theAreasymbol, theURL, theParameters, muStatus):
         parser.close()
         dNASIS = parser.dataDict
 
-        mapunitCnt = 0
+        if len(dNASIS) == 0:
+            arcpy.AddWarning(
+                "Trying another LIMS report which can " \
+                "only consider correlated map units"
+            )
+            url2 = ("https://nasis.sc.egov.usda.gov/NasisReportsWebSite/"
+                    "limsreport.aspx?report_name="
+                    "get_mapunit_from_NASISWebReport&p_areasymbol=" + 
+                    theAreasymbol)
+            arcpy.AddMessage(url2)
+            tab = pd.read_html(url2, header=0)[0]
+            dNASIS = dict(zip(tab['musym'], tab['lmapunitiid']))
 
         if len(dNASIS) == 0:
-            AddMsgAndPrint("\tRetrieved zero mapunit records from NASIS online report (check criteria in NASIS?)", 2)
-
+            arcpy.AddError(
+                "\tRetrieved zero mapunit records from NASIS online report "
+                "(check criteria in NASIS?)")
         else:
-            AddMsgAndPrint("\n\tRetrieved " + str(len(dNASIS)) + " correlated mapunits from NASIS")
+            arcpy.AddMessage(
+                f"\n\tRetrieved {len(dNASIS)} correlated mapunits from NASIS"
+            )
 
         return dNASIS
 
@@ -180,12 +199,13 @@ def NASIS_List(theAreasymbol, theURL, theParameters, muStatus):
         errorMsg()
         return dict()
 
-## ===================================================================================
+## =============================================================================
 def CompareMusym(dNASIS, musymList, theAreasymbol, dBadSurveys):
     #
     # Compare database contents with layer contents
     #
-    # Save errors to a dictionary: key=Areasymbol, SpatialCount, NASISCount, Note, NASISExtra, SpatialExtra
+    # Save errors to a dictionary: key=Areasymbol, SpatialCount, 
+    # NASISCount, Note, NASISExtra, SpatialExtra
     #
     try:
         #
@@ -201,48 +221,65 @@ def CompareMusym(dNASIS, musymList, theAreasymbol, dBadSurveys):
         musymCnt = len(missingLayer)
 
         if musymCnt > 0:
-            AddMsgAndPrint("\tNASIS legend for " + theAreasymbol  + " has " + str(musymCnt) + " MUSYM value(s) not present in the spatial layer:", 2)
+            arcpy.AddError(
+                f"\tNASIS legend for {theAreasymbol} has {musymCnt} MUSYM "
+                "value(s) not present in the spatial layer:"
+            )
 
             if musymCnt > 1:
-                AddMsgAndPrint("\t" + ", ".join(missingLayer))
+                arcpy.AddMessage("\t" + ", ".join(missingLayer))
 
             else:
-                AddMsgAndPrint("\t" + missingLayer[0])
+                arcpy.AddMessage("\t" + missingLayer[0])
 
         else:
-            AddMsgAndPrint(" \n\tAll MUSYM values in NASIS legend matched those in the spatial layer")
+            arcpy.AddMessage(
+                "\n\tAll MUSYM values in NASIS legend matched those in "
+                "the spatial layer"
+            )
 
 
-        # Compare layer MUSYM values with NASIS legend, granting an exception for NOTCOM
+        # Compare layer MUSYM values with NASIS legend, 
+        # granting an exception for NOTCOM
         #
         missingNASIS = list()
 
         for theMUSYM in musymList:
             if not theMUSYM in dNASIS:
                 if theMUSYM.strip() == "":
-                    AddMsgAndPrint("\tInput spatial layer contains one or more features with a missing MUSYM value",2)
+                    arcpy.AddError(
+                        "\tInput spatial layer contains one or more features " \
+                        "with a missing MUSYM value")
                     exit()
-
-                elif theMUSYM != "NOTCOM":                  # Remove this if NOTCOMs are NOT excluded from the check
+                # Remove this if NOTCOMs are NOT excluded from the check
+                elif theMUSYM != "NOTCOM":                  
                     missingNASIS.append(theMUSYM)
 
         dbCnt = len(missingNASIS)
 
         if dbCnt > 0:
-            AddMsgAndPrint("\tSpatial layer has " + str(dbCnt) + " MUSYM value(s) not present in NASIS:",2)
+            arcpy.AddError(
+                f"\tSpatial layer has {dbCnt} MUSYM "
+                "value(s) not present in NASIS:"
+            )
 
             if dbCnt > 1:
-                AddMsgAndPrint("\t" + ", ".join(missingNASIS), 0)
+                arcpy.AddMessage("\t" + ", ".join(missingNASIS))
 
             else:
-                AddMsgAndPrint("\t" + missingNASIS[0])
+                arcpy.AddMessage("\t" + missingNASIS[0])
 
         else:
-            AddMsgAndPrint("\n\tAll MUSYM values in spatial layer match the NASIS legend for " + theAreasymbol)
+            arcpy.AddMessage(
+                "\n\tAll MUSYM values in spatial layer match the NASIS legend "
+                "for " + theAreasymbol
+            )
 
         if dbCnt > 0 or musymCnt > 0:
             # Save errors to a dictionary
-            dBadSurveys[theAreasymbol] =(len(musymList), len(dNASIS), "",", ".join(missingLayer), ", ".join(missingNASIS) )
+            dBadSurveys[theAreasymbol] =(
+                len(musymList), len(dNASIS), "",", ".join(missingLayer), 
+                ", ".join(missingNASIS) )
             return False, dBadSurveys
 
         else:
@@ -253,7 +290,7 @@ def CompareMusym(dNASIS, musymList, theAreasymbol, dBadSurveys):
         dBadSurveys[theAreasymbol] = (0, 0, None, "","")
         return False, dBadSurveys
 
-## ===================================================================================
+## =============================================================================
 def UpdateMukeys(theInput, dNASIS, theAreasymbol, gdb):
     # Update layer MUKEY values for the specified AREASYMBOL value
 
@@ -275,8 +312,8 @@ def UpdateMukeys(theInput, dNASIS, theAreasymbol, gdb):
 
             for outRow in outCursor:
                 musym = outRow[0]
-
-                if musym in dNASIS:             # Remove this to if NOTCOMs are NOT excluded from the check
+                # Remove this to if NOTCOMs are NOT excluded from the check
+                if musym in dNASIS:             
                     outRow[1] = dNASIS[musym]
                     outCursor.updateRow(outRow)
         edit.stopOperation()
@@ -289,18 +326,25 @@ def UpdateMukeys(theInput, dNASIS, theAreasymbol, gdb):
         errorMsg()
         return False
 
-## ===================================================================================
+## =============================================================================
 def CreateMapunitDictionary(theInput, sql):
 
     try:
-        # Load mapunit dictionary with entire contents of input layer or featureclass
+        # Load mapunit dictionary with entire contents of 
+        # input layer or featureclass
         #
         dMapunits = dict()
         fieldList = ('AREASYMBOL','MUSYM')
-        AddMsgAndPrint("\nGetting mapunit information from spatial layer (" + os.path.basename(theInput) + ")")
-        arcpy.SetProgressorLabel("Getting mapunit information from spatial layer (" + os.path.basename(theInput) + ")")
-
-        with arcpy.da.SearchCursor(theInput, fieldList, sql) as cursor:  # 30 seconds faster when only running one out of many
+        arcpy.AddMessage(
+            "\nGetting mapunit information from spatial layer "
+            f"({os.path.basename(theInput)})"
+        )
+        arcpy.SetProgressorLabel(
+            "Getting mapunit information from spatial layer "
+            f"({os.path.basename(theInput)})"
+        )
+        # 30 seconds faster when only running one out of many
+        with arcpy.da.SearchCursor(theInput, fieldList, sql) as cursor:  
 
             for row in cursor:
                 #areasym = row[0].encode('ascii').strip()
@@ -322,33 +366,13 @@ def CreateMapunitDictionary(theInput, sql):
         errorMsg()
         return dMapunits
 
-## ===================================================================================
-def Number_Format(num, places=0, bCommas=True):
-    try:
-    # Format a number according to locality and given places
-        #locale.setlocale(locale.LC_ALL, "")
-        if bCommas:
-            theNumber = locale.format("%.*f", (places, num), True)
 
-        else:
-            theNumber = locale.format("%.*f", (places, num), False)
-        return theNumber
+## ====================================== Main Body ============================
 
-    except:
-        errorMsg()
-        return False
-
-
-## ====================================== Main Body ==================================
-# Import modules
-import sys, string, os, locale, arcpy, traceback,  collections, urllib
-from urllib.request import Request, urlopen, URLError, HTTPError
-from arcpy import env
 
 if __name__ == '__main__':
 
     try:
-        v = '1.1'
         theInput = arcpy.GetParameterAsText(0)
         asValues = arcpy.GetParameter(1)    # value list containing Areasymbol
         bUpdate = arcpy.GetParameter(2)
@@ -369,10 +393,11 @@ if __name__ == '__main__':
         if theCatalogPath.endswith('.shp') or theDataType == "SHAPEFILE":
             ws = os.path.dirname(theCatalogPath)
             rptFolder = ws
-            AddMsgAndPrint("\nFolder for input shapefile: " + ws)
+            arcpy.AddMessage("\nFolder for input shapefile: " + ws)
 
         elif theDataType in ('FEATURELAYER','FEATURECLASS'):
-            # input layer is a FEATURELAYER, get featurelayer specific information
+            # input layer is a FEATURELAYER, 
+            # get featurelayer specific information
             ws = os.path.dirname(theCatalogPath)
             wDesc = arcpy.da.Describe(ws)
 
@@ -386,11 +411,14 @@ if __name__ == '__main__':
                 theInput = theCatalogPath
 
             rptFolder = os.path.dirname(ws)
-            AddMsgAndPrint("\nWorkspace for input featurelayer: " + ws)
+            arcpy.AddMessage("\nWorkspace for input featurelayer: " + ws)
 
-        # Hardcode NASIS-LIMS Report Webservice for retrieving MUSYM and MUKEY values for a specified AREASYMBOL
-        # New NASIS report that allows user to specify any of the MUSTATUS values
-        theURL = r"https://nasis.sc.egov.usda.gov/NasisReportsWebSite/limsreport.aspx?"
+        # Hardcode NASIS-LIMS Report Webservice for retrieving MUSYM and MUKEY 
+        # values for a specified AREASYMBOL
+        # New NASIS report that allows user to specify any 
+        # of the MUSTATUS values
+        theURL = (r"https://nasis.sc.egov.usda.gov/"
+                  "NasisReportsWebSite/limsreport.aspx?")
         theParameters = "report_name=WEB-MapunitsAreaMustatus&area_sym="
 
         if mx1 is True:
@@ -413,15 +441,20 @@ if __name__ == '__main__':
         else:
             mx4 = "0"
 
-        # Update MUKEY values option was checked and no mapunit status was selected
-        # default to Correlated mapunit status
+        # Update MUKEY values option was checked and no mapunit status was 
+        # selected default to Correlated mapunit status
         if mx1 == "0" and mx2 == "0" and mx3 == "0" and mx4 == "0":
             if bUpdate is True:
                 mx3 = "3"
-                AddMsgAndPrint("\nMUKEY values cannot be updated without a Mapunit Status",1)
-                AddMsgAndPrint("Defaulting to Correlated Mapunit status",1)
+                arcpy.AddWarning(
+                    "\nMUKEY values cannot be updated without a Mapunit Status"
+                )
+                arcpy.AddWarning("Defaulting to Correlated Mapunit status")
             else:
-                AddMsgAndPrint("No options were selected.  User must select a Mapunit Status. Exiting!",2)
+                arcpy.AddError(
+                    "No options were selected.  User must select a "
+                    "Mapunit Status. Exiting!"
+                )
                 exit()
 
         muStatus = "&mx1=" + mx1 + "&mx2=" + mx2 + "&mx3=" + mx3 + "&mx4=" + mx4
@@ -432,7 +465,8 @@ if __name__ == '__main__':
         # Create a dictionary with information for surveys that fail the test
         dBadSurveys = dict()
 
-        # Create dictionary containing list of mapunits for each soil survey area (AREASYMBOL)
+        # Create dictionary containing list of mapunits 
+        # for each soil survey area (AREASYMBOL)
         asList = list()
         for theAreasymbol in asValues:
             asList.append("'" + theAreasymbol + "'")
@@ -443,18 +477,26 @@ if __name__ == '__main__':
         dMapunits = CreateMapunitDictionary(theInput, sql)
 
         if len(dMapunits) == 0:
-            AddMsgAndPrint("Failed to get mapunit information from " + theInput,2)
+            arcpy.AddError("Failed to get mapunit information from " + theInput)
             exit()
 
         elif len(dMapunits) > 0:
             # open a report file to dump errors to
-            rptFile = os.path.join(rptFolder, "QA_CompareSpatialNASISMapunit_" + os.path.basename(ws.replace(".","_")) + ".txt")
+            rptFile = os.path.join(
+                rptFolder, 
+                "QA_CompareSpatialNASISMapunit_"
+                f"{os.path.basename(ws.replace(".","_"))}.txt"
+            )
 
             if arcpy.Exists(rptFile):
                 os.remove(rptFile)
 
         arcpy.ResetProgressor()
-        arcpy.SetProgressor("step", "Comparing NASIS information with spatial layer...",  0, (iNum -1), 1)
+        arcpy.SetProgressor(
+            "step", 
+            "Comparing NASIS information with spatial layer...",  0, (iNum -1),
+            1
+        )
         iCnt = 0
 
         # Boolean to indicate whether MUKEY field exists
@@ -462,97 +504,159 @@ if __name__ == '__main__':
 
         for theAreasymbol in asValues:
             # Process each soil survey identified by Areasymbol
-            AddMsgAndPrint(" \n" + theAreasymbol + ": Comparing spatial layer and NASIS legend for this non-MLRA soil survey...")
-            AddMsgAndPrint("---------------------------------------------------------------------------------------")
+            arcpy.AddMessage(
+                f"\n{theAreasymbol}: Comparing spatial layer and NASIS legend" 
+                "for this non-MLRA soil survey..."
+            )
+            arcpy.AddMessage(
+                "---------------------------------------------------"
+                "------------------------------------"
+            )
             iCnt += 1
-            arcpy.SetProgressorLabel("Checking survey " + theAreasymbol.upper() + "  (" + Number_Format(iCnt, 0, True) + " of " + Number_Format(len(asList), 0, True) + ")")
+            arcpy.SetProgressorLabel(
+                f"Checking survey {theAreasymbol.upper()}  "
+                f"({iCnt}) of {asList})"
+            )
 
             # Create dictionary of MUSYM values retrieved from input layer
             musymList = dMapunits[theAreasymbol]
 
             if len(musymList) > 0:
-                AddMsgAndPrint("\tFound " + str(len(musymList)) + " mapunits in spatial layer")
+                arcpy.AddMessage(
+                    f"\tFound {len(musymList)} mapunits in spatial layer"
+                )
 
                 # Create dictionary of MUSYM values retrieved from NASIS
-                dNASIS = NASIS_List(theAreasymbol, theURL, theParameters, muStatus)
+                dNASIS = NASIS_List(
+                    theAreasymbol, theURL, theParameters, muStatus
+                )
 
                 if len(dNASIS) > 0:
 
                     # Compare MUSYM values in each dictionary
-                    # bGood - True if no legend mismatches found with NASIS; False otherwise
-                    bGood, dBadSurveys = CompareMusym(dNASIS, musymList, theAreasymbol, dBadSurveys)
+                    # bGood - True if no legend mismatches found with NASIS; 
+                    # False otherwise
+                    bGood, dBadSurveys = CompareMusym(
+                        dNASIS, musymList, theAreasymbol, dBadSurveys
+                    )
 
                     if bGood == False:
                         badSurveys.append(theAreasymbol)
 
-                    # If the AREASYMBOL legend has no conflicts and Update MUKEYs is
-                    # checked on proceed to update MUKEYs
+                    # If the AREASYMBOL legend has no conflicts and Update 
+                    # MUKEYs is checked on proceed to update MUKEYs
                     if bUpdate:
 
-                        # Check if MUKEY field exists; Add field if it doesn't exist
+                        # Check if MUKEY field exists; 
+                        # Add field if it doesn't exist
                         if not bMUKEYfldExist:
                             flds = [f.name for f in desc['fields']]
                             if "MUKEY" in flds:
                                 bMUKEYfldExist = True
                             else:
-                                arcpy.AddField_management(theInput,"MUKEY","TEXT","#","#","30",field_alias="Mapunit Key")
-                                AddMsgAndPrint("Successfully Added MUKEY field")
+                                arcpy.AddField_management(
+                                    theInput,
+                                    "MUKEY",
+                                    "TEXT","#","#","30",
+                                    field_alias="Mapunit Key"
+                                )
+                                arcpy.AddMessage(
+                                    "Successfully Added MUKEY field"
+                                )
                                 bMUKEYfldExist = True
 
                         if bGood:
                             if UpdateMukeys(
                                 theInput, dNASIS, theAreasymbol, ws
                                 ):
-                                AddMsgAndPrint("\n\tSuccessfully Updated MUKEY values")
+                                arcpy.AddMessage(
+                                    "\n\tSuccessfully Updated MUKEY values"
+                                )
                             else:
-                                AddMsgAndPrint("\n\tFailed to update MUKEY values")
+                                arcpy.AddMessage(
+                                    "\n\tFailed to update MUKEY values"
+                                )
 
                         else:
-                            # mismatch between NASIS and the maplayer MUSYM values! skip the update
-                            AddMsgAndPrint("\nMUKEY update cannot occur until legend mismatch has been fixed",1)
+                            # mismatch between NASIS and the maplayer 
+                            # MUSYM values! skip the update
+                            arcpy.AddWarning(
+                                "\nMUKEY update cannot occur until " \
+                                "legend mismatch has been fixed"
+                            )
 
                 else:
-                    AddMsgAndPrint("\tUnable to run comparison for " + theAreasymbol,2)
+                    arcpy.AddError(
+                        "\tUnable to run comparison for " + theAreasymbol
+                    )
                     badSurveys.append(theAreasymbol)
-                    dBadSurveys[theAreasymbol] = (len(musymList), 0, "Unable to retrieve mapunit information from NASIS", "","")
+                    dBadSurveys[theAreasymbol] = (
+                        len(musymList), 0, 
+                        "Unable to retrieve mapunit information from NASIS",
+                          "",""
+                    )
 
 
             else:
-                AddMsgAndPrint("\nFailed to get list of mapunits from input layer for " + theAreasymbol,2)
+                arcpy.AddMessage(
+                    "\nFailed to get list of mapunits from input layer for "
+                    + theAreasymbol
+                )
                 badSurveys.append(theAreasymbol)
-                dBadSurveys[theAreasymbol] = (0, 0, "Unable to retrieve mapunit information from spatial layer", "","")
+                dBadSurveys[theAreasymbol] = (
+                    0, 0, 
+                    "Unable to retrieve mapunit information from spatial layer",
+                      "",""
+                    )
 
             arcpy.SetProgressorPosition()
 
-        arcpy.SetProgressorLabel("Processing complete for all " + Number_Format(len(asList), 0, True) + " surveys")
+        arcpy.SetProgressorLabel(
+            f"Processing complete for all {asList} surveys"
+        )
 
         if len(badSurveys) > 0:
-            AddMsgAndPrint("\n---------------------------------------------------------------------------------------")
+            arcpy.AddMessage(
+                "\n-----------------------------------------"
+                "----------------------------------------------"
+            )
 
             if len(badSurveys) == 1:
-                AddMsgAndPrint("The following survey has problems that must be addressed: " + badSurveys[0], 2)
+                arcpy.AddError(
+                    "The following survey has problems that must be addressed: "
+                    + badSurveys[0]
+                )
 
             else:
-                AddMsgAndPrint("The following surveys have problems that must be addressed: " + ", ".join(badSurveys), 2)
+                arcpy.AddError(
+                    "The following surveys have problems that must be " \
+                    "addressed:" " " + ", ".join(badSurveys)
+                )
 
         if len(dBadSurveys) > 0:
-            AddMsgAndPrint("\nWriting summary info to tab-delimited text file: " + rptFile)
+            arcpy.AddMessage(
+                "\nWriting summary info to tab-delimited text file: " + rptFile
+            )
 
             # sort dictionary by Areasymbol
             sortedList = dBadSurveys
 
             with open(rptFile, 'w') as f:
-                hdr = "SurveyID\tSPATIAL_COUNT\tNASIS_COUNT\tNOTES\tEXTRA_SPATIAL\tEXTRA_NASIS" + " \n"
+                hdr = ("SurveyID\tSPATIAL_COUNT"
+                       "\tNASIS_COUNT\tNOTES\tEXTRA_SPATIAL\tEXTRA_NASIS \n")
                 f.write(hdr)
 
                 #for survey, info in dBadSurveys.items():
                 for survey in badSurveys:
                     info = dBadSurveys[survey]
-                    errorLine = survey + "\t" + str(info[0]) + "\t" + str(info[1]) + "\t" + info[2] + "\t" + info[4] +  "\t" + info[3] + "\n"
+                    errorLine = survey + "\t" + str(info[0]) + "\t" 
+                    + str(info[1]) + "\t" + info[2] + "\t" + info[4] 
+                    +  "\t" + info[3] + "\n"
                     f.write(errorLine)
-                    #AddMsgAndPrint(survey + "|" + str(info[0]) + "|" + str(info[1]) + "|" + info[2] + "|" + info[3] +  "|" + info[4], 1)
 
-        AddMsgAndPrint(" \n" + os.path.basename(sys.argv[0]) + " script finished \n ")
+        arcpy.AddMessage(
+            " \n" + os.path.basename(sys.argv[0]) + " script finished \n "
+        )
 
     except:
         errorMsg()
