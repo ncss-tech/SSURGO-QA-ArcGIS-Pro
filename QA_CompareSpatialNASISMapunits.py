@@ -15,8 +15,11 @@ query to the LIMS report server.
 
 @modified 02/10/2026
     @by: Alexnder Stum
-@version: 1.2
+@version: 1.2.1
 
+# -- Update 1.2.1; 02/10/2026
+- reverted use of second LIMS report and clarified language about criteria
+when zero map units returned.
 # -- Update 1.2; 02/10/2026
 - Removed function Number_Format in-liue of f-string functionality
 - Removed printmsg function replaced with arcpy print out functions
@@ -76,10 +79,10 @@ Updated  9/3/2020 - Adolfo Diaz
   used as independent library.
 - Normal messages are no longer Warnings unnecessarily.
 """
-v = '1.2'
+v = '1.2.1'
 
 from html.parser import HTMLParser
-import pandas as pd
+# import pandas as pd
 
 # Import modules
 import sys
@@ -167,23 +170,24 @@ def NASIS_List(theAreasymbol, theURL, theParameters, muStatus):
         parser.close()
         dNASIS = parser.dataDict
 
-        if len(dNASIS) == 0:
-            arcpy.AddWarning(
-                "Trying another LIMS report which can " \
-                "only consider correlated map units"
-            )
-            url2 = ("https://nasis.sc.egov.usda.gov/NasisReportsWebSite/"
-                    "limsreport.aspx?report_name="
-                    "get_mapunit_from_NASISWebReport&p_areasymbol=" + 
-                    theAreasymbol)
-            arcpy.AddMessage(url2)
-            tab = pd.read_html(url2, header=0)[0]
-            dNASIS = dict(zip(tab['musym'], tab['lmapunitiid']))
+        # if len(dNASIS) == 0:
+        #     arcpy.AddWarning(
+        #         "Trying another LIMS report which can " \
+        #         "only consider correlated map units"
+        #     )
+        #     url2 = ("https://nasis.sc.egov.usda.gov/NasisReportsWebSite/"
+        #             "limsreport.aspx?report_name="
+        #             "get_mapunit_from_NASISWebReport&p_areasymbol=" + 
+        #             theAreasymbol)
+        #     arcpy.AddMessage(url2)
+        #     tab = pd.read_html(url2, header=0)[0]
+        #     dNASIS = dict(zip(tab['musym'], tab['lmapunitiid']))
 
         if len(dNASIS) == 0:
             arcpy.AddError(
-                "\tRetrieved zero mapunit records from NASIS online report "
-                "(check criteria in NASIS?)")
+                "\tRetrieved zero mapunit records from NASIS online report: "
+                "Perhaps there are no map units that meet the selected criteria"
+            )
         else:
             arcpy.AddMessage(
                 f"\n\tRetrieved {len(dNASIS)} correlated mapunits from NASIS"
