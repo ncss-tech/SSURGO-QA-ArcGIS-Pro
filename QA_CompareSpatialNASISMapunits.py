@@ -13,10 +13,12 @@ query to the LIMS report server.
     @organization: National Soil Survey Center, USDA-NRCS
     @email: alexander.stum@usda.gov
 
-@modified 02/10/2026
+@modified 02/11/2026
     @by: Alexnder Stum
-@version: 1.2.1
+@version: 1.2.2
 
+# -- Update 1.2.2; 02/11/2026
+- ArcGIS Pro <3.6 can't work with multiline f-strings. Revised these instances
 # -- Update 1.2.1; 02/10/2026
 - reverted use of second LIMS report and clarified language about criteria
 when zero map units returned.
@@ -100,10 +102,8 @@ def errorMsg():
 
         exc_type, exc_value, exc_traceback = sys.exc_info()
         theMsg = ("\t"
-                  f"{traceback.format_exception(
-                      exc_type, exc_value, exc_traceback)[1]}"
-                      f"\n\t{traceback.format_exception(
-                          exc_type, exc_value, exc_traceback)[-1]}")
+                  f"{traceback.format_exception(exc_type, exc_value, exc_traceback)[1]}"
+                      f"\n\t{traceback.format_exception(exc_type, exc_value, exc_traceback)[-1]}")
 
         if theMsg.find("exit") > -1:
             arcpy.AddMessage("\n\n")
@@ -488,8 +488,7 @@ if __name__ == '__main__':
             # open a report file to dump errors to
             rptFile = os.path.join(
                 rptFolder, 
-                "QA_CompareSpatialNASISMapunit_"
-                f"{os.path.basename(ws.replace(".","_"))}.txt"
+                f"QA_CompareSpatialNASISMapunit_{os.path.basename(ws.replace('.','_'))}.txt"
             )
 
             if arcpy.Exists(rptFile):
@@ -653,9 +652,7 @@ if __name__ == '__main__':
                 #for survey, info in dBadSurveys.items():
                 for survey in badSurveys:
                     info = dBadSurveys[survey]
-                    errorLine = survey + "\t" + str(info[0]) + "\t" 
-                    + str(info[1]) + "\t" + info[2] + "\t" + info[4] 
-                    +  "\t" + info[3] + "\n"
+                    errorLine = f"{survey}\t{info[0]}\t{info[1]}\t{info[2]}\t{info[4]}\t{info[3]}\n"
                     f.write(errorLine)
 
         arcpy.AddMessage(
