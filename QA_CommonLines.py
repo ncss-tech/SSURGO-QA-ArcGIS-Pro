@@ -1,59 +1,126 @@
-# ---------------------------------------------------------------------------
-# QA_CommonLines.py
-# Created on: May 20, 2013
+"""
+---------------------------------------------------------------------------
+QA_CommonLines.py
+Created on: May 20, 2013
 
-# Author: Steve.Peaslee
-#         GIS Specialist
-#         National Soil Survey Center
-#         USDA - NRCS
-# e-mail: adolfo.diaz@usda.gov
-# phone: 608.662.4422 ext. 216
+Author: Steve.Peaslee
+        GIS Specialist
+        National Soil Survey Center
+        USDA - NRCS
+e-mail: adolfo.diaz@usda.gov
+phone: 608.662.4422 ext. 216
 
-# Author: Adolfo.Diaz
-#         GIS Specialist
-#         National Soil Survey Center
-#         USDA - NRCS
-# e-mail: adolfo.diaz@usda.gov
-# phone: 608.662.4422 ext. 216
-#
+Author: Adolfo.Diaz
+        GIS Specialist
+        National Soil Survey Center
+        USDA - NRCS
+e-mail: adolfo.diaz@usda.gov
+phone: 608.662.4422 ext. 216
 
-# Identifies adjacent polygons with the same, specified attribute
-# If common lines are found, they will be copied to a new featureclass and added to the
-# ArcMap TOC.
-#
-# ArcGIS 10.1 compatible
+@maintainer: Alexander Stum
+    @title:  GIS Specialist & Soil Scientist
+    @organization: National Soil Survey Center, USDA-NRCS
+    @email: alexander.stum@usda.gov
+@modified 02/24/2026
+    @by: Alexnder Stum
+@Version: 1.1
 
-# 06-03-2013. Fixed handling for some coverages, depending upon attribute fields
-# 06-04-2013. Added XYTolerance setting to allow snapping of overlapping survey boundaries
-#
-# 06-18-2013. Changed script to use the featurelayer and to use AREASYMBOL. Quick-and-dirty test!
-#
-# 08-02-2013. Adolfo is still having problems with performance and a tendancy to fail after 18-20 hours
-#             when run against Region 10 geodatabase in 64 bit background.
-#             I have seen occasions when the cursor fails because of a lock. I think this is on the scratchGDB version.
-#             May try moving scratchGDB to a 'Geodatabase' folder to avoid antivirus.
-#
-# 08-05-2013. Changed processing mode to use a list of AREASYMBOL values. This uses less resources.
+Identifies adjacent polygons with the same, specified attribute
+If common lines are found, they will be copied to a new featureclass and added to the
+ArcMap TOC.
 
-# ==========================================================================================
-# Updated  10/27/2020 - Adolfo Diaz
-#
-# - Updated and Tested for ArcGIS Pro 2.5.2 and python 3.6
-# - All describe functions use the arcpy.da.Describe functionality.
-# - All intermediate datasets are written to "in_memory" instead of written to a FGDB and
-#   and later deleted.  This avoids having to check and delete intermediate data during every
-#   execution.
-# - All cursors were updated to arcpy.da
-# - Added code to remove layers from an .aprx rather than simply deleting them
-# - Updated AddMsgAndPrint to remove ArcGIS 10 boolean and gp function
-# - Updated errorMsg() Traceback functions slightly changed for Python 3.6.
-# - Added parallel processing factor environment
-# - swithced from sys.exit() to exit()
-# - All gp functions were translated to arcpy
-# - Every function including main is in a try/except clause
-# - Main code is wrapped in if __name__ == '__main__': even though script will never be
-#   used as independent library.
-# - Normal messages are no longer Warnings unnecessarily.
+# --- Update 02/24/2026; v 1.1
+- Added arcErr and pyErr functions
+- Tweaked the final nested try-block as it was causing an error
+- Commented out final SetParameterAsText, not sure what its function was and 
+it was causing an error.
+- Added version message
+
+ArcGIS 10.1 compatible
+
+06-03-2013. Fixed handling for some coverages, depending upon attribute fields
+06-04-2013. Added XYTolerance setting to allow snapping of overlapping survey boundaries
+
+06-18-2013. Changed script to use the featurelayer and to use AREASYMBOL. Quick-and-dirty test!
+
+08-02-2013. Adolfo is still having problems with performance and a tendancy to fail after 18-20 hours
+            when run against Region 10 geodatabase in 64 bit background.
+            I have seen occasions when the cursor fails because of a lock. I think this is on the scratchGDB version.
+            May try moving scratchGDB to a 'Geodatabase' folder to avoid antivirus.
+
+08-05-2013. Changed processing mode to use a list of AREASYMBOL values. This uses less resources.
+
+==========================================================================================
+Updated  10/27/2020 - Adolfo Diaz
+
+- Updated and Tested for ArcGIS Pro 2.5.2 and python 3.6
+- All describe functions use the arcpy.da.Describe functionality.
+- All intermediate datasets are written to "in_memory" instead of written to a FGDB and
+  and later deleted.  This avoids having to check and delete intermediate data during every
+  execution.
+- All cursors were updated to arcpy.da
+- Added code to remove layers from an .aprx rather than simply deleting them
+- Updated AddMsgAndPrint to remove ArcGIS 10 boolean and gp function
+- Updated errorMsg() Traceback functions slightly changed for Python 3.6.
+- Added parallel processing factor environment
+- swithced from sys.exit() to exit()
+- All gp functions were translated to arcpy
+- Every function including main is in a try/except clause
+- Main code is wrapped in if __name__ == '__main__': even though script will never be
+  used as independent library.
+- Normal messages are no longer Warnings unnecessarily.
+"""
+v = '1.1'
+
+
+def pyErr(func: str) -> str:
+    """When a python exception is raised, this funciton formats the traceback
+    message.
+
+    Parameters
+    ----------
+    func : str
+        The function that raised the python error exception
+
+    Returns
+    -------
+    str
+        Formatted python error message
+    """
+    try:
+        etype, exc, tb = sys.exc_info()
+        
+        tbinfo = traceback.format_tb(tb)[0]
+        tbinfo = '\t\n'.join(tbinfo.split(','))
+        msgs = (f"PYTHON ERRORS:\nIn function: {func}"
+                f"\nTraceback info:\n{tbinfo}\nError Info:\n\t{exc}")
+        return msgs
+    except:
+        return "Error in pyErr method"
+
+
+def arcpyErr(func: str) -> str:
+    """When an arcpy by exception is raised, this function formats the 
+    message returned by arcpy.
+
+    Parameters
+    ----------
+    func : str
+        The function that raised the arcpy error exception
+
+    Returns
+    -------
+    str
+        Formatted arcpy error message
+    """
+    try:
+        etype, exc, tb = sys.exc_info()
+        line = tb.tb_lineno
+        msgs = (f"ArcPy ERRORS:\nIn function: {func}\non line: {line}"
+                f"\n\t{arcpy.GetMessages(2)}\n")
+        return msgs
+    except:
+        return "Error in arcpyErr method"
 
 
 # ===============================================================================================================
@@ -299,6 +366,8 @@ if __name__ == '__main__':
         asList = arcpy.GetParameter(3)                 # list of AREASYMBOL values to be processed
         #layerName = arcpy.GetParameterAsText(4)       # output featurelayer containing common soil lines (not required)
 
+        arcpy.AddMessage(f"Common Lines {v=}") 
+
         # Check out ArcInfo license for PolygonToLine
         arcpy.SetProduct("ArcInfo")
         arcpy.env.parallelProcessingFactor = "75%"
@@ -527,7 +596,8 @@ if __name__ == '__main__':
             else:
                 # Skip this survey, no match for AREASYMBOL
                 missList.append(AS)
-                AddMsgAndPrint("\n" + sp + str(iCnt) + ". " + fld2Name + " " + AS + ": no features found for this survey")
+                # sp?
+                AddMsgAndPrint("\n" + str(iCnt) + ". " + fld2Name + " " + AS + ": no features found for this survey")
 
             arcpy.SetProgressorPosition()
 
@@ -568,29 +638,32 @@ if __name__ == '__main__':
                                 maps.removeLayer(maps.listLayers()[layerList.index(clBaseName)])
 
                               # Could not figure out how to add symbolized data to Pro
-##                                symbologyLyrx = os.path.dirname(sys.argv[0]) + os.sep + 'RedLine.lyrx'
-##                                newSymLayer = arcpy.mp.LayerFile(symbologyLyrx)
-##
-##                                outLyr = maps.addDataFromPath(comFC2)
-##                                clLayer = maps.listLayers()[0]
-##                                newClLayer = arcpy.mp.LayerFile(clLayer)
-##                                AddMsgAndPrint(clLayer.name)
-##
-##                                #arcpy.ApplySymbologyFromLayer_management(comFC2,symbologyLyrx)
-##                                arcpy.ApplySymbologyFromLayer_management(newClLayer,newSymLayer)
-##                                break
+                            #    symbologyLyrx = os.path.dirname(sys.argv[0]) + os.sep + 'RedLine.lyrx'
+                            #    newSymLayer = arcpy.mp.LayerFile(symbologyLyrx)
 
-                arcpy.SetParameterAsText(4, comFC2)
+                            #    outLyr = maps.addDataFromPath(comFC2)
+                            #    clLayer = maps.listLayers()[0]
+                            #    newClLayer = arcpy.mp.LayerFile(clLayer)
+                            #    AddMsgAndPrint(clLayer.name)
 
-            except:
+                               #arcpy.ApplySymbologyFromLayer_management(comFC2,symbologyLyrx)
+                            #    arcpy.ApplySymbologyFromLayer_management(newClLayer,newSymLayer)
+                            #    break
+                # arcpy.AddMessage(f"{comFC2 =}: {type(comFC2)}")
+                # arcpy.SetParameterAsText(4, comFC2)
+
+            except arcpy.ExecuteError:
+                func = 'Symbolizing'
+                # func = sys._getframe().f_code.co_name
+                arcpy.AddWarning(arcpyErr(func))
                 pass
-
+            except:
+                func = 'Symbolizing'
+                # func = sys._getframe().f_code.co_name
+                arcpy.AddWarning(pyErr(func))
+                pass
         else:
             AddMsgAndPrint("No commonlines detected \n ")
-
-##        else:
-##            AddMsgAndPrint("\nFailed to set scratchworkspace \n", 2)
-
     except:
         errorMsg()
 
