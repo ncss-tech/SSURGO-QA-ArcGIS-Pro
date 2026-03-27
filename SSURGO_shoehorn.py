@@ -12,10 +12,13 @@ and ammend some acute vertices.
     @organization: National Soil Survey Center, USDA-NRCS
     @email: alexander.stum@usda.gov
 
-@modified 3/20/2025
+@modified 8/15/2025
     @by: Alexnder Stum
-@version: 2.10.1
+@version: 2.10.2
 
+# ---
+Update 2.10.2; 8/15/2025
+- Hard coded tolerance to 1
 # ---
 Update 2.10.1; 3/20/2025
 - Removed a unecessary `edit` paramter for the Reassemble function
@@ -527,6 +530,7 @@ def tweezer(arcs, inter, v0, MUpoly_, N, cutV, weakEggs ,min_angle, dec, polys):
                        str(sys.exc_info()[-1].tb_lineno))
         arcpy.AddError("\n" + str(sys.exc_info()[0]))
         arcpy.AddError("\n" + str(sys.exc_info()[1]))
+        arcpy.AddMessage(f"{fid=}| {npGeom}")
         raise
 
 
@@ -552,10 +556,18 @@ def Reassemble(
                 parcs = arcs[a0, :]
                 parcs2 = arcs[a0, a1]
 
-                pool.apply_async(ShapeUp,
+                p_result = pool.apply_async(ShapeUp,
                                  args=(parcs, parcs2, ai,
                                        {k: shapes[k] for k in a0}, mu, FID),
                                  callback=update)
+                try:
+                    p_result.get(timeout=3)
+                except mp.TimeoutError:
+                    arcpy.AddWarning(
+                        f"Timed out rassembling polygon {FID}, "
+                        "verify it inserted properly"
+                    )
+                    badEggs['Reassembly'].append(str(FID))
             except:
                 arcpy.AddWarning(f"Failure rassembling polygon {FID}")
                 badEggs['Reassembly'].append(str(FID))
@@ -724,7 +736,7 @@ def main():
             arcpy.AddWarning(
                 "Make sure you have the most current SSURGO_QA toolbox\n."
             )
-            raise
+            #raise
         if fD_sr.name != MUin_sr.name:
             arcpy.AddWarning("Input Feature Class and output Feature Dataset "
                              "have different projections")
@@ -818,7 +830,7 @@ def main():
         arcpy.SetProgressor('default', 'Creating Boundary Nodes')
         arcpy.env.XYResolution = XYR
         arcpy.env.XYTolerance = XYT
-        T = 10 * XYR
+        T = 1#10 * XYR
         if not BT:
             BT = T * 2**.5
 
@@ -1109,7 +1121,7 @@ def main():
         # allLines = [arcpy.Polyline(arcpy.Array([P(*p) for p in line])) 
         # for line in shapes.values()]
         # arcpy.management.CopyFeatures(allLines, 'allLines')
-        msg = f"Survey {status//3+1} of {nSurvs}: Reassmbling polygons"
+        msg = f"Survey {status//3+1} of {nSurvs}: Reassembling polygons"
         arcpy.SetProgressor('step', msg)
         arcpy.SetProgressorPosition(int(f * (status+2)))
     # %%%% Call Tweezer & Reassemble
