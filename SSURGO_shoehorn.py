@@ -56,7 +56,7 @@ Update 2.8c
 - Added snapping of boundary nodes to survery boundaries VERTEX 
     and EDGE for sparse areas
 """
-
+v = '2.11'
 
 # import modules
 import arcpy
@@ -232,23 +232,20 @@ def BNodes(SA_, MU, nodes, dec, sr):
         Point       = arcpy.Point
         PG          = arcpy.PointGeometry
 
-        arcpy.management.SelectLayerByLocation(MU, 
-                                               "INTERSECT", 
-                                               SA_) 
+        arcpy.management.SelectLayerByLocation(
+            MU, "INTERSECT", SA_) 
                                                # search_distance = BT) #,
                                                # None, "SUBSET_SELECTION")
         arcpy.PolygonToLine_management(MU, MU_)
         arcpy.MakeFeatureLayer_management(MU_, MU_o, "LEFT_FID = -1")
-        arcpy.management.SelectLayerByLocation(MU_o, 
-                                               "INTERSECT", 
-                                               SA_)
+        arcpy.management.SelectLayerByLocation(
+            MU_o, "INTERSECT", SA_
+        )
                                                # search_distance = BT) #,
                                                # None, "SUBSET_SELECTION")
-        MU_d = arcpy.analysis.PairwiseDissolve(MU_o, 
-                                               arcpy.Geometry(),
-                                               "RIGHT_FID",
-                                               None, 
-                                               "MULTI_PART")
+        MU_d = arcpy.analysis.PairwiseDissolve(
+            MU_o, arcpy.Geometry(), "RIGHT_FID", None, "MULTI_PART"
+        )
         points = {(round(p.X, dec), round(p.Y, dec))
                               for G in MU_d 
                               for P in G
@@ -260,8 +257,10 @@ def BNodes(SA_, MU, nodes, dec, sr):
 
 
     except:
-        arcpy.AddError("Error in BNodes function: " + 
-                       str(sys.exc_info()[-1].tb_lineno))
+        arcpy.AddError(
+            "Error in BNodes function: " + 
+            str(sys.exc_info()[-1].tb_lineno)
+        )
         arcpy.AddError("\n" + str(sys.exc_info()[0]))
         arcpy.AddError("\n" + str(sys.exc_info()[1]))
         raise
@@ -394,15 +393,21 @@ def tweezer(arcs, inter, v0, MUpoly_, N, cutV, weakEggs ,min_angle, dec, polys):
         angles = np.zeros((N, 3, 1), dtype=np.float32)
         v3v = v3-v0
 
-        angles[:, 0, 0] = arccos(ein(eS, v3v[:, 1, :], v3v[:, 2, :]) /
-                                 sqrt(ein(eS2, v3v[:, 1, :], v3v[:, 1, :])) /
-                                 sqrt(ein(eS2, v3v[:, 2, :], v3v[:, 2, :])))
-        angles[:, 1, 0] = arccos(ein(eS, v3v[:, 0, :], v3v[:, 2, :]) /
-                                 sqrt(ein(eS2, v3v[:, 0, :], v3v[:, 0, :])) /
-                                 sqrt(ein(eS2, v3v[:, 2, :], v3v[:, 2, :])))
-        angles[:, 2, 0] = arccos(ein(eS, v3v[:, 0, :], v3v[:, 1, :]) /
-                                 sqrt(ein(eS2, v3v[:, 0, :], v3v[:, 0, :])) /
-                                 sqrt(ein(eS2, v3v[:, 1, :], v3v[:, 1, :])))
+        angles[:, 0, 0] = arccos(
+            ein(eS, v3v[:, 1, :], v3v[:, 2, :]) /
+            sqrt(ein(eS2, v3v[:, 1, :], v3v[:, 1, :])) /
+            sqrt(ein(eS2, v3v[:, 2, :], v3v[:, 2, :]))
+        )
+        angles[:, 1, 0] = arccos(
+            ein(eS, v3v[:, 0, :], v3v[:, 2, :]) /
+            sqrt(ein(eS2, v3v[:, 0, :], v3v[:, 0, :])) /
+            sqrt(ein(eS2, v3v[:, 2, :], v3v[:, 2, :]))
+        )
+        angles[:, 2, 0] = arccos(
+            ein(eS, v3v[:, 0, :], v3v[:, 1, :]) /
+            sqrt(ein(eS2, v3v[:, 0, :], v3v[:, 0, :])) /
+            sqrt(ein(eS2, v3v[:, 1, :], v3v[:, 1, :]))
+        )
 
         acute = angles < min_angle
         acute[0, :, :] = False
@@ -536,7 +541,7 @@ def tweezer(arcs, inter, v0, MUpoly_, N, cutV, weakEggs ,min_angle, dec, polys):
 
 def Reassemble(
         iCur, arcs, polys, shapes, weakEggs, badEggs, pCores, areaSym, SFDS
-        ):
+    ):
     count = 0
     postV = 0
     newShape = []
@@ -613,6 +618,7 @@ def Reassemble(
 # %% Main
 def main():
     try:
+        arcpy.AddMessage(f"Shoehorn Version {v}")
         ######################
         #======= Parameters  ==========
         MUin = arcpy.GetParameterAsText(0)
@@ -706,7 +712,7 @@ def main():
         badEggs         = {'Exception':[],'Reassembly':[]}
 
         # %%% General Setup
-        arcpy.AddMessage("Shoehorn Version 2.10.1")
+        
         # threads = psutil.cpu_count()/psutil.cpu_count(False)
         # keep in mind this actually returns threads, not cores
         cores = os.cpu_count()
@@ -883,7 +889,10 @@ def main():
             # Boundary Nodes along input
             BNodes2(MUin, nNodes, areas, dec, pCores, fD_sr)
             # Needed to snap nodes between selected surveys
-            arcpy.analysis.PairwiseIntegrate(nNodes, BT)
+            # Integrate calculates distance with a radius that fits a Box  
+            # in each quadrant around a point and snaps any points whose radii
+            # intersect
+            arcpy.analysis.PairwiseIntegrate(nNodes, BT / 2**.5 / 2)
             arcpy.edit.Snap(nNodes, [[kNodes, 'VERTEX', BT]])
             arcpy.edit.Snap(nNodes, [[SA1_, 'VERTEX', BT]])
             arcpy.edit.Snap(nNodes, [[SA1_, 'EDGE', BT]])
@@ -960,7 +969,9 @@ def main():
             )
             arcpy.edit.Snap(MUpoly_L, [[bound_L, 'VERTEX', BT]])
             # arcpy.Snap_edit(MUpoly_L, [[bound_L, 'EDGE', BT]])
-            arcpy.management.SplitLineAtPoint(MUpoly_L, bound_L, MUsplit, BT)
+            arcpy.management.SplitLineAtPoint(
+                MUpoly_L, bound_L, MUsplit, BT* 2**0.5
+            )
 
             arcpy.management.FeatureVerticesToPoints(MUsplit, mid, "MID")
             arcpy.analysis.SpatialJoin(
@@ -985,7 +996,9 @@ def main():
             arcpy.management.AddField(ends, 'tail', "SHORT")
             arcpy.management.AddField(starts, 'tail', "SHORT")
             arcpy.management.CalculateField(ends, "tail", "1")
-            arcpy.management.Merge(ends+";"+starts, TheEnd)
+            arcpy.management.Merge(ends + ";" + starts, TheEnd)
+            # if ever the need arose, snapping ends to themselves might removed
+            # arcs less than BT
             arcpy.edit.Snap(TheEnd, [[bound_L, 'VERTEX', BT]])
 
             arcpy.management.Delete(bound_L)
