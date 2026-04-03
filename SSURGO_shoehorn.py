@@ -12,10 +12,19 @@ and ammend some acute vertices.
     @organization: National Soil Survey Center, USDA-NRCS
     @email: alexander.stum@usda.gov
 
-@modified 8/15/2025
+@modified 04/03/2026
     @by: Alexnder Stum
-@version: 2.10.2
+@version: 2.11
 
+# ---
+Update 2.11; 04/03/2026
+- It seems there is a difference in how PairwiseInegrate and Snap interpret 
+xy Tolerance. PairwiseIntegrate snaps any vertices whose radii intersect and
+the radius is the Tolerance x sqrt(2). While Snap snaps vertices within a 
+radius with in the specified xy Tolerance. Calculation added to make these
+equivalent. This fix should eliminate medium-range edge-match errors.
+- Made the line split line radius of outside MUPOLYGON arcs the same as for 
+arcs of SAPOLYGON arcs
 # ---
 Update 2.10.2; 8/15/2025
 - Hard coded tolerance to 1
