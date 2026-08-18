@@ -27,7 +27,7 @@ version 1.1, Updated 8/18/2026 - Alexander Stum
 - Updated string join
 
 """
-v = '1.1'
+v = '1.2'
 
 import sys
 import traceback
