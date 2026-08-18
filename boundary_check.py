@@ -16,8 +16,12 @@ refresh.
 @created 3/18/2025
 @modified 8/48/26
     @by: Alexnder Stum
-@version: 1.1
+@version: 1.2
 
+# --- 
+version 1.2, Updated 8/18/2026 - Alexander Stum
+- Checks the ssas set for None, which might occur if a gap related to a Bezier
+curve?
 # --- 
 version 1.1, Updated 8/18/2026 - Alexander Stum
 - Updated string join
@@ -120,6 +124,9 @@ def main():
                 )
                 with arcpy.da.SearchCursor(novel_lyr, 'AREASYMBOL') as sCur:
                     ssas = {ssa for ssa, in sCur}
+                if None in ssas:
+                    ssas.remove(None)
+                    ssas.add('Possible Gap')
                 ssas_t = '\n\t'.join(ssas)
                 arcpy.AddMessage(f"\t{ssas_t}")
             # Do we want to switch?
@@ -132,6 +139,9 @@ def main():
                 )
                 with arcpy.da.SearchCursor(novel_lyr, 'AREASYMBOL') as sCur:
                     ssas = {ssa for ssa, in sCur}
+                if None in ssas:
+                                    ssas.remove(None)
+                                    ssas.add('Possible Gap')
                 ssas_t = '\n\t'.join(ssas)
                 arcpy.AddMessage(f"\t{ssas_t}")
         else:
