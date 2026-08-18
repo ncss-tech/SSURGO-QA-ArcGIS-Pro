@@ -14,15 +14,17 @@ refresh.
     @email: alexander.stum@usda.gov
 
 @created 3/18/2025
-@modified 3/18/2025
+@modified 8/48/26
     @by: Alexnder Stum
-@version: 1.0
+@version: 1.1
 
-# ---"
+# --- 
+version 1.1, Updated 8/18/2026 - Alexander Stum
+- Updated string join
+
 """
+v = '1.1'
 
-
-import os
 import sys
 import traceback
 import arcpy
@@ -79,6 +81,7 @@ def arcpyErr(func: str) -> str:
 
 def main():
     try:
+        arcpy.AddMessage(f"boundary_check version {v}")
         gdb_p = arcpy.GetParameterAsText(0)
         pr_p = gdb_p + '/ProjectRecord'
         sa_pts = pr_p + '/sapoint_gold'
@@ -86,6 +89,7 @@ def main():
         sareg_p = pr_p + '/saregional_gold'
         current_pts = 'in_memory/current_pts'
         novel_pts = pr_p + '/novel_pts'
+        removed_pts = pr_p + '/removed_pts'
         novel_lyr = 'novel_pts_lyr'
 
         # Create current SAPOLYGON points
@@ -101,10 +105,12 @@ def main():
                 "(see novel_pts feature)"
             )
             # Check along regional boundary
+            # Add search radius?
             arcpy.management.MakeFeatureLayer(novel_pts, novel_lyr)
             arcpy.management.SelectLayerByLocation(
                 novel_lyr, "BOUNDARY_TOUCHES", sareg_p
             )
+            # Add those outside regional extent
             arcpy.management.SelectLayerByLocation(
                 novel_lyr, "WITHIN", sareg_p, None, "ADD_TO_SELECTION", "INVERT"
             )
@@ -116,6 +122,7 @@ def main():
                     ssas = {ssa for ssa, in sCur}
                 ssas_t = '\n\t'.join(ssas)
                 arcpy.AddMessage(f"\t{ssas_t}")
+            # Do we want to switch?
             arcpy.management.SelectLayerByAttribute(
                 novel_lyr, "SWITCH_SELECTION"
             )
